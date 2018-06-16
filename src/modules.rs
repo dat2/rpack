@@ -1,4 +1,6 @@
 use failure::Error;
+use hex;
+use ring::digest;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -23,5 +25,11 @@ impl Module {
         let result = fs::canonicalize(module_path_buf)?;
         Ok(result.to_owned())
     }
-}
 
+    pub fn id(&self) -> String {
+        let bytes = digest::digest(&digest::SHA512, self.content.as_bytes());
+        let mut hex_encoded = hex::encode(bytes);
+        hex_encoded.truncate(4);
+        hex_encoded
+    }
+}

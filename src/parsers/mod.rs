@@ -6,7 +6,7 @@ use std::path::Path;
 
 mod html;
 mod javascript;
-mod unknown;
+mod plaintext;
 
 fn parse_with_graph_recursive<P: AsRef<Path>>(
     input_path: &P,
@@ -14,11 +14,11 @@ fn parse_with_graph_recursive<P: AsRef<Path>>(
 ) -> Result<NodeIndex, Error> {
     let p = input_path.as_ref();
     let (module, dependencies) = match p.extension() {
-        None => unknown::parse_unknown_module(input_path)?,
+        None => plaintext::parse_plaintext_module(input_path)?,
         Some(os_str) => match os_str.to_str() {
             Some("html") => html::parse_html_module(input_path)?,
             Some("js") => javascript::parse_javascript_module(input_path)?,
-            _ => unknown::parse_unknown_module(input_path)?,
+            _ => plaintext::parse_plaintext_module(input_path)?,
         },
     };
     let module_index = graph.add_node(module);
@@ -31,8 +31,10 @@ fn parse_with_graph_recursive<P: AsRef<Path>>(
     Ok(module_index)
 }
 
-pub fn parse_module_graph<P: AsRef<Path>>(input_path: &P) -> Result<Graph<Module, usize>, Error> {
+pub fn parse_module_graph<P: AsRef<Path>>(
+    input_path: &P,
+) -> Result<(Graph<Module, usize>, NodeIndex), Error> {
     let mut result = Graph::new();
-    parse_with_graph_recursive(input_path, &mut result)?;
-    Ok(result)
+    let entry_point_id = parse_with_graph_recursive(input_path, &mut result)?;
+    Ok((result, entry_point_id))
 }

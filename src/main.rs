@@ -4,7 +4,9 @@ extern crate clap;
 extern crate easter;
 extern crate esprit;
 extern crate failure;
+extern crate hex;
 extern crate petgraph;
+extern crate ring;
 extern crate victoria_dom;
 
 mod modules;
@@ -13,10 +15,20 @@ mod parsers;
 use clap::{App, Arg, SubCommand};
 use failure::Error;
 use parsers::parse_module_graph;
+use petgraph::visit::Dfs;
+use petgraph::Incoming;
 
 fn build(entry: &str) -> Result<(), Error> {
-    let graph = parse_module_graph(&entry.to_owned());
-    println!("{:?}", graph);
+    let (mut graph, entry_point_id) = parse_module_graph(&entry.to_owned())?;
+    let mut dfs = Dfs::new(&graph, entry_point_id);
+    while let Some(node_index) = dfs.next(&graph) {
+        // use a walker -- a detached neighbors iterator
+        let mut edges = graph.neighbors_directed(node_index, Incoming).detach();
+        while let Some(edge) = edges.next_edge(&graph) {
+            let (dep, _) = graph.index_twice_mut(node_index, edge);
+            println!("{}", dep.id());
+        }
+    }
     Ok(())
 }
 

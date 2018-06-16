@@ -4,7 +4,9 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-pub fn parse_unknown_module<P: AsRef<Path>>(input_path: &P) -> Result<(Module, Vec<PathBuf>), Error> {
+pub fn parse_plaintext_module<P: AsRef<Path>>(
+    input_path: &P,
+) -> Result<(Module, Vec<PathBuf>), Error> {
     let absolute_path = fs::canonicalize(input_path)?;
     let mut file = File::open(&absolute_path)?;
     let mut contents = String::new();
