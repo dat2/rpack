@@ -4,10 +4,33 @@ use ring::digest;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Default, Debug, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug)]
+pub enum ModuleType {
+    JavaScript,
+    Html,
+    Css,
+    PlainText,
+}
+
+impl ModuleType {
+    pub fn parse_from_path<P: AsRef<Path>>(path: &P) -> ModuleType {
+        match path.as_ref().extension() {
+            None => ModuleType::PlainText,
+            Some(os_str) => match os_str.to_str() {
+                Some("html") => ModuleType::Html,
+                Some("js") => ModuleType::JavaScript,
+                Some("css") => ModuleType::Css,
+                _ => ModuleType::PlainText,
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Module {
     pub path: PathBuf,
     pub content: String,
+    pub mtype: ModuleType,
 }
 
 impl Module {
@@ -15,6 +38,7 @@ impl Module {
         Module {
             path: path.as_ref().to_owned(),
             content: content,
+            mtype: ModuleType::parse_from_path(path),
         }
     }
 
