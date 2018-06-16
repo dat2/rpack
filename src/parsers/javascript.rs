@@ -26,6 +26,7 @@ pub fn parse_javascript_module<P: AsRef<Path>>(
             ModItem::Import(Import::ForEffect(_, path)) => {
                 dependencies.push(module.resolve_relative(&path.value)?);
             }
+            // parse require with relative path
             ModItem::StmtListItem(StmtListItem::Decl(Decl::Const(_, dtors, _))) => {
                 if let [ConstDtor { ref value, .. }] = dtors[..] {
                     if let Expr::Call(_, box Expr::Id(Id { ref name, .. }), args) = value {

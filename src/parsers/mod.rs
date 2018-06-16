@@ -2,11 +2,11 @@ use failure::Error;
 use modules::Module;
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
-use std::default::Default;
 use std::path::Path;
 
 mod html;
 mod javascript;
+mod unknown;
 
 fn parse_with_graph_recursive<P: AsRef<Path>>(
     input_path: &P,
@@ -14,11 +14,11 @@ fn parse_with_graph_recursive<P: AsRef<Path>>(
 ) -> Result<NodeIndex, Error> {
     let p = input_path.as_ref();
     let (module, dependencies) = match p.extension() {
-        None => Default::default(),
+        None => unknown::parse_unknown_module(input_path)?,
         Some(os_str) => match os_str.to_str() {
             Some("html") => html::parse_html_module(input_path)?,
             Some("js") => javascript::parse_javascript_module(input_path)?,
-            _ => Default::default(),
+            _ => unknown::parse_unknown_module(input_path)?,
         },
     };
     let module_index = graph.add_node(module);
