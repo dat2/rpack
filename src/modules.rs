@@ -1,7 +1,8 @@
 use failure::Error;
 use hex;
 use ring::digest;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -34,20 +35,20 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn new<P: AsRef<Path>>(path: &P, content: String) -> Module {
+    pub fn from_path<P: AsRef<Path>>(path: &P) -> Result<Module, Error> {
+        let absolute_path = fs::canonicalize(path)?;
+        let mut file = File::open(&absolute_path)?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+        Ok(Module::new(&absolute_path, contents))
+    }
+
+    fn new<P: AsRef<Path>>(path: &P, content: String) -> Module {
         Module {
             path: path.as_ref().to_owned(),
             content: content,
             mtype: ModuleType::parse_from_path(path),
         }
-    }
-
-    pub fn resolve_relative<P: AsRef<Path>>(&self, dependency_path: P) -> Result<PathBuf, Error> {
-        let mut module_path_buf = self.path.clone();
-        module_path_buf.pop();
-        module_path_buf.push(dependency_path);
-        let result = fs::canonicalize(module_path_buf)?;
-        Ok(result.to_owned())
     }
 
     pub fn id(&self) -> String {
