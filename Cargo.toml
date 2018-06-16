@@ -6,6 +6,11 @@ version = "0.1.0"
 [dependencies]
 clap = "2.31.2"
 failure = "0.1.1"
-html5ever = "0.22.3"
 petgraph = "0.4.12"
 victoria-dom = "0.1.2"
+
+[dependencies.esprit]
+git = "https://github.com/dherman/esprit"
+
+[dependencies.easter]
+git = "https://github.com/dherman/esprit"

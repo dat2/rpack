@@ -6,6 +6,7 @@ use std::default::Default;
 use std::path::Path;
 
 mod html;
+mod javascript;
 
 fn parse_with_graph_recursive<P: AsRef<Path>>(
     input_path: &P,
@@ -16,6 +17,7 @@ fn parse_with_graph_recursive<P: AsRef<Path>>(
         None => Default::default(),
         Some(os_str) => match os_str.to_str() {
             Some("html") => html::parse_html_module(input_path)?,
+            Some("js") => javascript::parse_javascript_module(input_path)?,
             _ => Default::default(),
         },
     };

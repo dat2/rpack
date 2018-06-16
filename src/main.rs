@@ -1,4 +1,8 @@
+#![feature(box_patterns)]
+
 extern crate clap;
+extern crate easter;
+extern crate esprit;
 extern crate failure;
 extern crate petgraph;
 extern crate victoria_dom;
