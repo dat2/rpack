@@ -6,6 +6,13 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
+pub enum ImportType {
+    Require,
+    Import,
+    DynamicImport,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum ModuleType {
     JavaScript,
     Html,

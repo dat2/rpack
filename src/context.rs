@@ -7,6 +7,10 @@ use modules::Module;
 pub struct Context;
 
 impl Context {
+    pub fn new() -> Context {
+        Context
+    }
+
     pub fn resolve<P: AsRef<Path>>(&self, module: &Module, path: P) -> Result<PathBuf, Error> {
         self.resolve_relative(module, path)
     }

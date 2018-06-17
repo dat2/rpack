@@ -9,29 +9,20 @@ extern crate petgraph;
 extern crate ring;
 extern crate victoria_dom;
 
+mod assets;
 mod context;
+mod codegen;
 mod modules;
 mod parser;
 
 use clap::{App, Arg, SubCommand};
 use context::Context;
 use failure::Error;
-use parser::parse_module_graph;
-use petgraph::visit::Dfs;
-use petgraph::Incoming;
 
 fn build(entry: &str) -> Result<(), Error> {
-    let context = Context;
-    let (mut graph, entry_point_id) = parse_module_graph(&context, &entry.to_owned())?;
-    let mut dfs = Dfs::new(&graph, entry_point_id);
-    while let Some(node_index) = dfs.next(&graph) {
-        // use a walker -- a detached neighbors iterator
-        let mut edges = graph.neighbors_directed(node_index, Incoming).detach();
-        while let Some(edge) = edges.next_edge(&graph) {
-            let (dep, _) = graph.index_twice_mut(node_index, edge);
-            println!("{}", dep.id());
-        }
-    }
+    let context = Context::new();
+    let (graph, entry_point_id) = parser::parse_module_graph(&context, &entry.to_owned())?;
+    codegen::codegen(graph, entry_point_id)?;
     Ok(())
 }
 

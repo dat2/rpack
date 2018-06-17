@@ -1,6 +1,6 @@
 use context::Context;
 use failure::Error;
-use modules::{Module, ModuleType};
+use modules::{Module, ModuleType, ImportType};
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
 use std::path::Path;
@@ -12,7 +12,7 @@ mod plaintext;
 fn parse_with_graph_recursive<P: AsRef<Path>>(
     context: &Context,
     input_path: &P,
-    mut graph: &mut Graph<Module, usize>,
+    mut graph: &mut Graph<Module, ImportType>,
 ) -> Result<NodeIndex, Error> {
     let module_type = ModuleType::parse_from_path(&input_path);
     let (module, dependencies) = match module_type {
@@ -25,7 +25,7 @@ fn parse_with_graph_recursive<P: AsRef<Path>>(
 
     for dep in dependencies {
         let dep_index = parse_with_graph_recursive(context, &dep, &mut graph)?;
-        graph.add_edge(module_index, dep_index, 0);
+        graph.add_edge(module_index, dep_index, ImportType::Require);
     }
 
     Ok(module_index)
@@ -34,7 +34,7 @@ fn parse_with_graph_recursive<P: AsRef<Path>>(
 pub fn parse_module_graph<P: AsRef<Path>>(
     context: &Context,
     input_path: &P,
-) -> Result<(Graph<Module, usize>, NodeIndex), Error> {
+) -> Result<(Graph<Module, ImportType>, NodeIndex), Error> {
     let mut result = Graph::new();
     let entry_point_id = parse_with_graph_recursive(context, input_path, &mut result)?;
     Ok((result, entry_point_id))
