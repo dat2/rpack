@@ -2,8 +2,6 @@ use failure::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use modules::Module;
-
 pub struct Context;
 
 impl Context {
@@ -11,16 +9,20 @@ impl Context {
         Context
     }
 
-    pub fn resolve<P: AsRef<Path>>(&self, module: &Module, path: P) -> Result<PathBuf, Error> {
-        self.resolve_relative(module, path)
+    pub fn resolve<P: AsRef<Path>, P2: AsRef<Path>>(
+        &self,
+        module_path: &P,
+        path: P2,
+    ) -> Result<PathBuf, Error> {
+        self.resolve_relative(module_path, path)
     }
 
-    fn resolve_relative<P: AsRef<Path>>(
+    fn resolve_relative<P: AsRef<Path>, P2: AsRef<Path>>(
         &self,
-        module: &Module,
-        path: P,
+        module_path: &P,
+        path: P2,
     ) -> Result<PathBuf, Error> {
-        let mut module_path_buf = module.path.clone();
+        let mut module_path_buf = module_path.as_ref().to_owned();
         module_path_buf.pop();
         module_path_buf.push(path);
         let result = fs::canonicalize(module_path_buf)?;

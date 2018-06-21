@@ -385,6 +385,7 @@ dependencies = [
  "esprit 0.0.5 (git+https://github.com/dherman/esprit)",
  "failure 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "joker 0.0.5 (git+https://github.com/dherman/esprit)",
  "petgraph 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "victoria-dom 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",

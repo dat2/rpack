@@ -5,15 +5,16 @@ extern crate easter;
 extern crate esprit;
 extern crate failure;
 extern crate hex;
+extern crate joker;
 extern crate petgraph;
 extern crate ring;
 extern crate victoria_dom;
 
-mod assets;
-mod context;
 mod codegen;
-mod modules;
-mod parser;
+mod context;
+mod dependency;
+mod io_utils;
+mod javascript;
 
 use clap::{App, Arg, SubCommand};
 use context::Context;
@@ -21,7 +22,7 @@ use failure::Error;
 
 fn build(entry: &str) -> Result<(), Error> {
     let context = Context::new();
-    let (graph, entry_point_id) = parser::parse_module_graph(&context, &entry.to_owned())?;
+    let (graph, entry_point_id) = dependency::parse_dependency_graph(&context, &entry.to_owned())?;
     codegen::codegen(graph, entry_point_id)?;
     Ok(())
 }

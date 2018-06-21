@@ -16,3 +16,6 @@ git = "https://github.com/dherman/esprit"
 
 [dependencies.esprit]
 git = "https://github.com/dherman/esprit"
+
+[dependencies.joker]
+git = "https://github.com/dherman/esprit"
