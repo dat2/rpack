@@ -19,10 +19,10 @@ mod javascript;
 use clap::{App, Arg, SubCommand};
 use context::Context;
 use failure::Error;
+use std::env;
 
-fn build(entry: &str) -> Result<(), Error> {
-    let context = Context::new();
-    let (graph, entry_point_id) = dependency::parse_dependency_graph(&context, &entry.to_owned())?;
+fn build(context: &Context, entry: &str) -> Result<(), Error> {
+    let (graph, entry_point_id) = dependency::parse_dependency_graph(context, &entry.to_owned())?;
     codegen::codegen(graph, entry_point_id)?;
     Ok(())
 }
@@ -44,8 +44,12 @@ fn run() -> Result<(), Error> {
         )
         .get_matches();
 
+    let cwd = env::current_dir()?;
+    let resolve_path =
+        env::var("RESOLVE_PATH").unwrap_or(format!("{}/node_modules", cwd.display()));
+    let context = Context::new(&resolve_path)?;
     if let Some(matches) = matches.subcommand_matches("build") {
-        build(matches.value_of("ENTRY").unwrap())?;
+        build(&context, matches.value_of("ENTRY").unwrap())?;
     }
 
     Ok(())

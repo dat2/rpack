@@ -1,7 +1,6 @@
 use context::Context;
 use failure::Error;
 use hex;
-use javascript::queries::get_dependencies;
 use javascript::{parse_js_module, JsModule};
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
@@ -14,11 +13,13 @@ fn parse_with_graph_recursive<P: AsRef<Path>>(
     mut graph: &mut Graph<JsModule, usize>,
 ) -> Result<NodeIndex, Error> {
     let module = parse_js_module(&path)?;
-    let dependencies = get_dependencies(context, &module);
+    let dependencies = module.get_dependencies();
 
+    let module_path = module.path.clone();
     let module_index = graph.add_node(module);
     for dep in dependencies {
-        let dep_index = parse_with_graph_recursive(context, &dep, &mut graph)?;
+        let resolved_dep = context.resolve(&module_path, dep)?;
+        let dep_index = parse_with_graph_recursive(context, &resolved_dep, &mut graph)?;
         graph.add_edge(module_index, dep_index, 0);
     }
 

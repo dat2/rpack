@@ -1,6 +1,5 @@
 pub mod ast;
 mod parser;
-pub mod queries;
 
 use self::ast::Program;
 use failure::Error;
@@ -9,7 +8,13 @@ use std::path::{Path, PathBuf};
 
 pub struct JsModule {
     program: Program,
-    path: PathBuf,
+    pub path: PathBuf,
+}
+
+impl JsModule {
+    pub fn get_dependencies(&self) -> Vec<PathBuf> {
+        Vec::new()
+    }
 }
 
 pub fn parse_js_module<P: AsRef<Path>>(path: &P) -> Result<JsModule, Error> {
