@@ -3,6 +3,7 @@ use javascript::JsModule;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::Dfs;
 use petgraph::Graph;
+use std::ops::Index;
 
 pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<(), Error> {
     // collect all js files into 1 big asset
@@ -12,8 +13,9 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
     let mut dfs = Dfs::new(&graph, entry_point_id);
     // let mut strings = Vec::new();
     while let Some(node_index) = dfs.next(&graph) {
-        println!("{:?}", node_index);
-        /*let node = graph.index(node_index);
+        let node = graph.index(node_index);
+        println!("{:?}", node);
+        /*
         if node.mtype == ModuleType::JavaScript {
             strings.push(format!(
                 "  {id}: function (module, exports, require) {{\n// {filepath} \n{content}\n  }}",

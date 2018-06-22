@@ -6,6 +6,7 @@ use failure::{self, Error};
 use io_utils;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug)]
 pub struct JsModule {
     program: Program,
     pub path: PathBuf,
@@ -17,11 +18,7 @@ impl JsModule {
         for statement in &self.program.statements {
             match statement {
                 Statement::Import(_, path) => {
-                    let mut path_buf = PathBuf::from(path);
-                    if path_buf.extension().is_none() {
-                        path_buf.set_extension("js");
-                    }
-                    result.push(path_buf);
+                    result.push(PathBuf::from(path));
                 }
             }
         }

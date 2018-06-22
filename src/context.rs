@@ -13,9 +13,7 @@ impl Context {
         for path in resolve_path.split(':') {
             resolve_paths.push(fs::canonicalize(path)?);
         }
-        Ok(Context {
-            resolve_paths
-        })
+        Ok(Context { resolve_paths })
     }
 
     pub fn resolve<P: AsRef<Path>, P2: AsRef<Path>>(
@@ -39,6 +37,11 @@ impl Context {
         let mut module_path_buf = module_path.as_ref().to_owned();
         module_path_buf.pop();
         module_path_buf.push(path);
+        if module_path_buf.is_dir() {
+            module_path_buf.push("index.js");
+        } else if module_path_buf.extension().is_none() {
+            module_path_buf.set_extension("js");
+        }
         let result = fs::canonicalize(module_path_buf)?;
         Ok(result.to_owned())
     }
