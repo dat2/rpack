@@ -1,1 +1,2 @@
-const c = require('./c')
+import c from './c'
+console.log('butt')

@@ -35,7 +35,7 @@ pub fn parse_dependency_graph<P: AsRef<Path>>(
     Ok((result, entry_point_id))
 }
 
-pub fn generate_module_id(source: &str) -> String {
+pub fn _generate_module_id(source: &str) -> String {
     let bytes = digest::digest(&digest::SHA512, source.as_bytes());
     let mut hex_encoded = hex::encode(bytes);
     hex_encoded.truncate(4);

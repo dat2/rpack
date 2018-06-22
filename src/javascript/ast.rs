@@ -1,6 +1,6 @@
 #[derive(Debug)]
 pub struct Program {
-    pub statements: Vec<Statement>
+    pub statements: Vec<Statement>,
 }
 
 pub type Id = String;
