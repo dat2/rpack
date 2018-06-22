@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [dependencies]
 clap = "2.31.2"
+combine = "3.3.2"
 failure = "0.1.1"
 hex = "0.3.2"
 petgraph = "0.4.12"

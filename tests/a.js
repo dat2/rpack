@@ -1,2 +1,2 @@
-const b = require('./b')
-console.log('hello world')
+import b from './b'
+import c from './c'

@@ -1,6 +1,7 @@
 #![feature(box_patterns)]
 
 extern crate clap;
+extern crate combine;
 extern crate easter;
 extern crate esprit;
 extern crate failure;
