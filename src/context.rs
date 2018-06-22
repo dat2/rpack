@@ -22,7 +22,7 @@ impl Context {
         path: P2,
     ) -> Result<PathBuf, Error> {
         let p = path.as_ref();
-        if p.is_relative() {
+        if p.starts_with(".") {
             self.resolve_relative(module_path, p)
         } else {
             self.resolve_absolute(p)
@@ -53,9 +53,12 @@ impl Context {
             .map(|path_buf| {
                 let mut mutable_path_buf = path_buf.clone();
                 mutable_path_buf.push(&p);
+                if mutable_path_buf.is_dir() {
+                    mutable_path_buf.push("index.js");
+                }
                 mutable_path_buf
             })
-            .find(|path_buf| path_buf.exists())
+            .find(|path| path.exists())
             .ok_or_else(|| failure::err_msg(format!("Could not find '{}'", p.display())))
     }
 }
