@@ -4,7 +4,7 @@ use petgraph::graph::NodeIndex;
 use petgraph::visit::Dfs;
 use petgraph::Graph;
 
-pub fn codegen(graph: Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<(), Error> {
+pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<(), Error> {
     // collect all js files into 1 big asset
     // let mut main_js_asset = Asset::new(&"build/example.js".to_owned(), AssetType::JavaScriptChunk);
     // eg. { 1234: function(m,e,r) {  }, ab14: function(m,e,r) {} }

@@ -33,7 +33,7 @@ pub fn parse_js_module<P: AsRef<Path>>(path: &P) -> Result<JsModule, Error> {
     let (absolute_path, contents) = io_utils::read_file(&path)?;
     match self::parser::parse(&contents) {
         Ok(program) => Ok(JsModule {
-            program: program,
+            program,
             path: absolute_path,
         }),
         Err(e) => Err(failure::err_msg(format!(

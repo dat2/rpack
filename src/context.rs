@@ -14,7 +14,7 @@ impl Context {
             resolve_paths.push(fs::canonicalize(path)?);
         }
         Ok(Context {
-            resolve_paths: resolve_paths,
+            resolve_paths
         })
     }
 
@@ -47,7 +47,7 @@ impl Context {
         let p = path.as_ref();
         self.resolve_paths
             .iter()
-            .map(|&ref path_buf| {
+            .map(|path_buf| {
                 let mut mutable_path_buf = path_buf.clone();
                 mutable_path_buf.push(&p);
                 mutable_path_buf

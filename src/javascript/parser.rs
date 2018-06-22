@@ -76,9 +76,7 @@ where
 {
     many(import_statement())
         .skip(eof())
-        .map(|statements| Program {
-            statements: statements,
-        })
+        .map(|statements| Program { statements })
 }
 
 pub fn parse(source: &str) -> Result<Program, Error> {
