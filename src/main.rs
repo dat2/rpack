@@ -11,11 +11,12 @@ extern crate petgraph;
 extern crate ring;
 extern crate victoria_dom;
 
+#[macro_use]
+mod javascript;
 mod codegen;
 mod context;
 mod dependency;
 mod io_utils;
-mod javascript;
 
 use clap::{App, Arg, SubCommand};
 use context::Context;

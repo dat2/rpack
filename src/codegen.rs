@@ -10,27 +10,18 @@ use std::ops::Index;
 
 fn map_statements(statement: &Statement) -> FunctionBodyStatement {
     // TODO match path to module id
-    match statement {
+    FunctionBodyStatement::Statement(match statement {
         Statement::Import(ImportSpecifier::ImportDefault(id), path) => {
-            FunctionBodyStatement::Statement(Statement::VariableDeclaration {
-                declaration: VariableDeclaration {
-                    kind: VariableDeclarationKind::Var,
-                    declarations: vec![VariableDeclarator {
-                        id: Pattern::Id { id: id.clone() },
-                        init: Some(Expression::Call {
-                            callee: Box::new(Expression::Id {
-                                id: "_rpack_require".to_string(),
-                            }),
-                            arguments: vec![Expression::Literal {
-                                literal: Literal::StringLiteral(path.clone()),
-                            }],
-                        }),
-                    }],
-                },
-            })
+            build_ast! {
+                var [pat_id id.clone()] = [
+                    expr_call
+                        [expr_id "_rpack_require".to_string()]
+                        [[expr_str path.clone()]]
+                ]
+            }
         }
-        other => FunctionBodyStatement::Statement(other.clone()),
-    }
+        other => other.clone(),
+    })
 }
 
 pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<String, Error> {
@@ -46,47 +37,29 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
         let node = graph.index(node_index);
 
         // TODO add comment explaining which file this came from
-        let function_expression = Expression::Function {
-            function: Function {
-                id: None,
-                params: vec![
-                    Pattern::Id {
-                        id: "module".to_string(),
-                    },
-                    Pattern::Id {
-                        id: "exports".to_string(),
-                    },
-                    Pattern::Id {
-                        id: "_rpack_require".to_string(),
-                    },
-                ],
-                body: node.program.body.iter().map(map_statements).collect(),
-                generator: false,
-            },
-        };
-        let generated_module_id = generate_module_id(&node.source);
-        let property = Property {
-            key: PropertyKey::Literal(Literal::StringLiteral(generated_module_id)),
-            value: function_expression,
-            kind: PropertyKind::Init,
+        let property = build_ast! {
+            // '<module_id>': function(module, exports, _rpack_require) { body }
+            prop
+                [prop_str_key generate_module_id(&node.source)]
+                [expr_func
+                    [
+                        [pat_id "module".to_string()],
+                        [pat_id "exports".to_string()],
+                        [pat_id "_rpack_require".to_string()]
+                    ]
+                    {
+                        node.program.body.iter().map(map_statements).collect()
+                    }
+                ]
         };
         properties.push(property);
     }
 
-    let object_statement = Statement::VariableDeclaration {
-        declaration: VariableDeclaration {
-            kind: VariableDeclarationKind::Var,
-            declarations: vec![VariableDeclarator {
-                id: Pattern::Id {
-                    id: "modules".to_string(),
-                },
-                init: Some(Expression::Object { properties }),
-            }],
-        },
+    let object_statement = build_ast! {
+        var [pat_id "modules".to_string()] = [expr_obj {properties}]
     };
 
     result_ast.body.push(object_statement);
-    println!("{:?}", result_ast);
     Ok(result_ast.to_string())
 }
 

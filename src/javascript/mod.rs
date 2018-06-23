@@ -1,6 +1,8 @@
+#[macro_use]
+mod macros;
 pub mod ast;
-mod parser;
 mod display;
+mod parser;
 
 use self::ast::*;
 use failure::{self, Error};
