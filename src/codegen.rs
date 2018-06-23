@@ -66,7 +66,7 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
         };
         let generated_module_id = generate_module_id(&node.source);
         let property = Property {
-            key: PropertyKey::Id(generated_module_id),
+            key: PropertyKey::Literal(Literal::StringLiteral(generated_module_id)),
             value: function_expression,
             kind: PropertyKind::Init,
         };

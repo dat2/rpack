@@ -4,11 +4,15 @@ use std::fmt;
 
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "use strict;")?;
-        for stmt in &self.body {
-            write!(f, "{};", stmt)?;
-        }
-        write!(f, "")
+        write!(
+            f,
+            "{}",
+            self.body
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(";")
+        )
     }
 }
 
@@ -124,7 +128,7 @@ impl fmt::Display for PropertyKey {
         match self {
             PropertyKey::Id(id) => write!(f, "{}", id),
             PropertyKey::Expression(e) => write!(f, "[{}]", e),
-            _ => write!(f, ""),
+            PropertyKey::Literal(l) => write!(f, "{}", l),
         }
     }
 }
