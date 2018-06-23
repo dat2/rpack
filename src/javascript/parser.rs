@@ -66,7 +66,9 @@ where
         reserved("from"),
         string_literal(),
         eol(),
-    ).map(|(_, id, _, string_lit, _)| Statement::Import(id, string_lit))
+    ).map(|(_, id, _, string_lit, _)| {
+        Statement::Import(ImportSpecifier::ImportDefault(id), string_lit)
+    })
 }
 
 fn program<I>() -> impl Parser<Input = I, Output = Program>
@@ -74,9 +76,10 @@ where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    many(import_statement())
-        .skip(eof())
-        .map(|statements| Program { statements })
+    many(import_statement()).skip(eof()).map(|body| Program {
+        source_type: SourceType::Module,
+        body,
+    })
 }
 
 pub fn parse(source: &str) -> Result<Program, Error> {

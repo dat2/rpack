@@ -1,11 +1,34 @@
 use context::Context;
 use failure::Error;
 use hex;
+use javascript::ast::*;
 use javascript::{parse_js_module, JsModule};
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
 use ring::digest;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+struct DependencyVisitor;
+
+impl Visitor for DependencyVisitor {
+    type Result = Vec<PathBuf>;
+
+    fn visit_program(&mut self, program: &Program) -> Self::Result {
+        let mut result = Vec::new();
+        for statement in &program.body {
+            let mut statement_result = self.visit_statement(statement);
+            result.append(&mut statement_result);
+        }
+        result
+    }
+
+    fn visit_statement(&mut self, statement: &Statement) -> Self::Result {
+        match statement {
+            Statement::Import(_, path) => vec![PathBuf::from(path)],
+            _ => Vec::new(),
+        }
+    }
+}
 
 fn parse_with_graph_recursive<P: AsRef<Path>>(
     context: &Context,
@@ -13,7 +36,8 @@ fn parse_with_graph_recursive<P: AsRef<Path>>(
     mut graph: &mut Graph<JsModule, usize>,
 ) -> Result<NodeIndex, Error> {
     let module = parse_js_module(&path)?;
-    let dependencies = module.get_dependencies();
+    let mut visitor = DependencyVisitor;
+    let dependencies = module.program.accept(&mut visitor);
 
     let module_path = module.path.clone();
     let module_index = graph.add_node(module);

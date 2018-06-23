@@ -8,22 +8,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct JsModule {
-    program: Program,
+    pub program: Program,
     pub path: PathBuf,
-}
-
-impl JsModule {
-    pub fn get_dependencies(&self) -> Vec<PathBuf> {
-        let mut result = Vec::new();
-        for statement in &self.program.statements {
-            match statement {
-                Statement::Import(_, path) => {
-                    result.push(PathBuf::from(path));
-                }
-            }
-        }
-        result
-    }
 }
 
 pub fn parse_js_module<P: AsRef<Path>>(path: &P) -> Result<JsModule, Error> {
