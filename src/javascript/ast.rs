@@ -13,11 +13,7 @@ pub type Id = String;
 // literals
 pub type StringLiteral = String;
 
-#[derive(Debug, Clone)]
-pub enum BooleanLiteral {
-    True,
-    False,
-}
+pub type BooleanLiteral = bool;
 
 #[derive(Debug, Clone)]
 pub struct NullLiteral;

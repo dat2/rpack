@@ -9,6 +9,7 @@ use ring::digest;
 use std::ops::Index;
 
 fn map_statements(statement: &Statement) -> FunctionBodyStatement {
+    // TODO match path to module id
     match statement {
         Statement::Import(ImportSpecifier::ImportDefault(id), path) => {
             FunctionBodyStatement::Statement(Statement::VariableDeclaration {
@@ -18,7 +19,7 @@ fn map_statements(statement: &Statement) -> FunctionBodyStatement {
                         id: Pattern::Id { id: id.clone() },
                         init: Some(Expression::Call {
                             callee: Box::new(Expression::Id {
-                                id: "require".to_string(),
+                                id: "_rpack_require".to_string(),
                             }),
                             arguments: vec![Expression::Literal {
                                 literal: Literal::StringLiteral(path.clone()),
@@ -32,7 +33,7 @@ fn map_statements(statement: &Statement) -> FunctionBodyStatement {
     }
 }
 
-pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<(), Error> {
+pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<String, Error> {
     // collect all js files into 1 big asset
     let mut result_ast = Program {
         source_type: SourceType::Script,
@@ -56,7 +57,7 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
                         id: "exports".to_string(),
                     },
                     Pattern::Id {
-                        id: "require".to_string(),
+                        id: "_rpack_require".to_string(),
                     },
                 ],
                 body: node.program.body.iter().map(map_statements).collect(),
@@ -86,8 +87,7 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
 
     result_ast.body.push(object_statement);
     println!("{:?}", result_ast);
-
-    Ok(())
+    Ok(result_ast.to_string())
 }
 
 pub fn generate_module_id(source: &str) -> String {

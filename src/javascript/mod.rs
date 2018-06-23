@@ -1,5 +1,6 @@
 pub mod ast;
 mod parser;
+mod display;
 
 use self::ast::*;
 use failure::{self, Error};

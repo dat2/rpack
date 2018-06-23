@@ -24,7 +24,8 @@ use std::env;
 
 fn build(context: &Context, entry: &str) -> Result<(), Error> {
     let (graph, entry_point_id) = dependency::parse_dependency_graph(context, &entry.to_owned())?;
-    codegen::codegen(&graph, entry_point_id)?;
+    let result = codegen::codegen(&graph, entry_point_id)?;
+    println!("{}", result);
     Ok(())
 }
 
