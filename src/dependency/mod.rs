@@ -1,11 +1,9 @@
 use context::Context;
 use failure::Error;
-use hex;
 use javascript::ast::*;
 use javascript::{parse_js_module, JsModule};
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
-use ring::digest;
 use std::path::{Path, PathBuf};
 
 struct DependencyVisitor;
@@ -57,11 +55,4 @@ pub fn parse_dependency_graph<P: AsRef<Path>>(
     let mut result = Graph::new();
     let entry_point_id = parse_with_graph_recursive(context, input_path, &mut result)?;
     Ok((result, entry_point_id))
-}
-
-pub fn _generate_module_id(source: &str) -> String {
-    let bytes = digest::digest(&digest::SHA512, source.as_bytes());
-    let mut hex_encoded = hex::encode(bytes);
-    hex_encoded.truncate(4);
-    hex_encoded
 }
