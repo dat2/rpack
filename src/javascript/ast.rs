@@ -144,6 +144,12 @@ pub enum Statement {
         right: Expression,
         body: Box<Statement>,
     },
+    FunctionDeclaration {
+        declaration: FunctionDeclaration,
+    },
+    VariableDeclaration {
+        declaration: VariableDeclaration,
+    },
     // ES2015
     Import(ImportSpecifier, StringLiteral),
 }
@@ -185,12 +191,6 @@ pub enum ImportSpecifier {
 
 // declarations
 #[derive(Debug, Clone)]
-pub enum Declaration {
-    FunctionDeclaration(FunctionDeclaration),
-    VariableDeclaration(VariableDeclaration),
-}
-
-#[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
     id: Id,
     function: Function,
@@ -198,8 +198,8 @@ pub struct FunctionDeclaration {
 
 #[derive(Debug, Clone)]
 pub struct VariableDeclaration {
-    kind: VariableDeclarationKind,
-    declarations: Vec<VariableDeclarator>,
+    pub kind: VariableDeclarationKind,
+    pub declarations: Vec<VariableDeclarator>,
 }
 
 #[derive(Debug, Clone)]
@@ -212,13 +212,19 @@ pub enum VariableDeclarationKind {
 
 #[derive(Debug, Clone)]
 pub struct VariableDeclarator {
-    id: Pattern,
-    init: Option<Expression>,
+    pub id: Pattern,
+    pub init: Option<Expression>,
 }
 
 // expressions
 #[derive(Debug, Clone)]
 pub enum Expression {
+    Id {
+        id: Id,
+    },
+    Literal {
+        literal: Literal,
+    },
     This,
     // ES2015
     Super,

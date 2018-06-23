@@ -8,29 +8,34 @@ use petgraph::Graph;
 use ring::digest;
 use std::ops::Index;
 
-struct Minifier;
-
-impl Visitor for Minifier {
-    type Result = String;
-
-    fn visit_program(&mut self, program: &Program) -> Self::Result {
-        let mut result = String::new();
-        for statement in &program.body {
-            let statement_result = self.visit_statement(statement);
-            result.push_str(&statement_result);
+fn map_statements(statement: &Statement) -> FunctionBodyStatement {
+    match statement {
+        Statement::Import(ImportSpecifier::ImportDefault(id), path) => {
+            FunctionBodyStatement::Statement(Statement::VariableDeclaration {
+                declaration: VariableDeclaration {
+                    kind: VariableDeclarationKind::Var,
+                    declarations: vec![VariableDeclarator {
+                        id: Pattern::Id { id: id.clone() },
+                        init: Some(Expression::Call {
+                            callee: Box::new(Expression::Id {
+                                id: "require".to_string(),
+                            }),
+                            arguments: vec![Expression::Literal {
+                                literal: Literal::StringLiteral(path.clone()),
+                            }],
+                        }),
+                    }],
+                },
+            })
         }
-        result
-    }
-
-    fn visit_statement(&mut self, _statement: &Statement) -> Self::Result {
-        String::new()
+        other => FunctionBodyStatement::Statement(other.clone()),
     }
 }
 
 pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<(), Error> {
     // collect all js files into 1 big asset
     let mut result_ast = Program {
-        source_type: SourceType::Module,
+        source_type: SourceType::Script,
         body: Vec::new(),
     };
 
@@ -54,12 +59,7 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
                         id: "require".to_string(),
                     },
                 ],
-                body: node
-                    .program
-                    .body
-                    .iter()
-                    .map(|s| FunctionBodyStatement::Statement(s.clone()))
-                    .collect(),
+                body: node.program.body.iter().map(map_statements).collect(),
                 generator: false,
             },
         };
@@ -72,8 +72,20 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
         properties.push(property);
     }
 
-    let mut object_expression = Expression::Object { properties };
-    println!("{:?}", object_expression);
+    let object_statement = Statement::VariableDeclaration {
+        declaration: VariableDeclaration {
+            kind: VariableDeclarationKind::Var,
+            declarations: vec![VariableDeclarator {
+                id: Pattern::Id {
+                    id: "modules".to_string(),
+                },
+                init: Some(Expression::Object { properties }),
+            }],
+        },
+    };
+
+    result_ast.body.push(object_statement);
+    println!("{:?}", result_ast);
 
     Ok(())
 }
