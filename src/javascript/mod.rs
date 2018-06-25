@@ -2,7 +2,7 @@
 mod macros;
 pub mod ast;
 mod display;
-mod parser;
+pub mod parser;
 
 use self::ast::*;
 use failure::{self, Error};

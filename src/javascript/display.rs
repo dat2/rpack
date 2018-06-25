@@ -29,6 +29,7 @@ impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Statement::VariableDeclaration { declaration } => write!(f, "{}", declaration),
+            Statement::Expression { expression } => write!(f, "{}", expression),
             _ => write!(f, ""),
         }
     }

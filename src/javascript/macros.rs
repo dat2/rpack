@@ -99,6 +99,11 @@ macro_rules! build_ast {
             },
         }
     };
+    (call [$($id:tt)+] [$($args:tt)+]) => {
+        Statement::Expression {
+            expression: build_ast!(expr_call [$($id)+] [$($args)+])
+        }
+    };
 }
 
 #[macro_export]

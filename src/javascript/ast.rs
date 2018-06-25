@@ -188,8 +188,8 @@ pub enum ImportSpecifier {
 // declarations
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
-    id: Id,
-    function: Function,
+    pub id: Id,
+    pub function: Function,
 }
 
 #[derive(Debug, Clone)]

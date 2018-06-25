@@ -1,7 +1,7 @@
 use failure::Error;
 use hex;
 use javascript::ast::*;
-use javascript::JsModule;
+use javascript::{self, JsModule};
 use petgraph::graph::NodeIndex;
 use petgraph::visit::Dfs;
 use petgraph::Graph;
@@ -9,7 +9,7 @@ use ring::digest;
 use std::collections::HashMap;
 
 fn map_statements(
-    file_path_to_node_indices: &HashMap<String, String>,
+    path_to_module_id: &HashMap<String, String>,
     statement: &Statement,
 ) -> FunctionBodyStatement {
     // TODO match path to module id
@@ -19,7 +19,7 @@ fn map_statements(
                     var [pat_id id.clone()] = [
                         expr_call
                             [expr_id "_rpack_require".to_string()]
-                            [[expr_str {file_path_to_node_indices[path].clone()}]]
+                            [[expr_str {path_to_module_id[path].clone()}]]
                     ]
             }
         }
@@ -29,11 +29,11 @@ fn map_statements(
 
 pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<String, Error> {
     // map paths -> generated module id
-    let mut file_path_to_node_indices = HashMap::new();
+    let mut path_to_module_id = HashMap::new();
     let mut dfs = Dfs::new(&graph, entry_point_id);
     while let Some(node_index) = dfs.next(&graph) {
         let ref node = graph[node_index];
-        file_path_to_node_indices.insert(
+        path_to_module_id.insert(
             node.path.display().to_string(),
             generate_module_id(&node.source),
         );
@@ -50,8 +50,7 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
     while let Some(node_index) = dfs.next(&graph) {
         let ref node = graph[node_index];
 
-        let generated_module_id =
-            file_path_to_node_indices[&node.path.display().to_string()].to_string();
+        let generated_module_id = path_to_module_id[&node.path.display().to_string()].to_string();
 
         // TODO add comment explaining which file this came from
         let property = build_ast! {
@@ -65,19 +64,32 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
                         [pat_id "_rpack_require".to_string()]
                     ]
                     {
-                        node.program.body.iter().map(|statement| map_statements(&file_path_to_node_indices, statement)).collect()
+                        node.program.body.iter().map(|statement| map_statements(&path_to_module_id, statement)).collect()
                     }
                 ]
         };
         properties.push(property);
     }
 
-    let object_statement = build_ast! {
-        var [pat_id "modules".to_string()] = [expr_obj {properties}]
-    };
+    let ref entry_point_id =
+        path_to_module_id[&graph[entry_point_id].path.display().to_string()].clone();
+    result_ast.body.extend(vec![
+        build_ast! {
+            var [pat_id "modules".to_string()] = [expr_obj {properties}]
+        },
+        build_ast! {
+            call
+                [expr_id "_rpack_bootstrap".to_string()]
+                [
+                    [expr_id "modules".to_string()]
+                    [expr_str entry_point_id.to_string()]
+                ]
+        },
+    ]);
 
-    result_ast.body.push(object_statement);
-    Ok(result_ast.to_string())
+    let mut bootstrap_ast = javascript::parser::parse(include_str!("bootstrap.js"))?;
+    bootstrap_ast.body.append(&mut result_ast.body);
+    Ok(bootstrap_ast.to_string())
 }
 
 pub fn generate_module_id(source: &str) -> String {
