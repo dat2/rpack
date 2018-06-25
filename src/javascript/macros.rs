@@ -100,3 +100,10 @@ macro_rules! build_ast {
         }
     };
 }
+
+#[macro_export]
+macro_rules! match_ast {
+    (import [$($id:tt)+] from [$($path:tt)+]) => {
+        Statement::Import(ImportSpecifier::ImportDefault($($id)+), $($path)+)
+    }
+}

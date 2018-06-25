@@ -6,18 +6,21 @@ use petgraph::graph::NodeIndex;
 use petgraph::visit::Dfs;
 use petgraph::Graph;
 use ring::digest;
-use std::ops::Index;
+use std::collections::HashMap;
 
-fn map_statements(statement: &Statement) -> FunctionBodyStatement {
+fn map_statements(
+    file_path_to_node_indices: &HashMap<String, String>,
+    statement: &Statement,
+) -> FunctionBodyStatement {
     // TODO match path to module id
     FunctionBodyStatement::Statement(match statement {
-        Statement::Import(ImportSpecifier::ImportDefault(id), path) => {
+        match_ast!(import [id] from [path]) => {
             build_ast! {
-                var [pat_id id.clone()] = [
-                    expr_call
-                        [expr_id "_rpack_require".to_string()]
-                        [[expr_str path.clone()]]
-                ]
+                    var [pat_id id.clone()] = [
+                        expr_call
+                            [expr_id "_rpack_require".to_string()]
+                            [[expr_str {file_path_to_node_indices[path].clone()}]]
+                    ]
             }
         }
         other => other.clone(),
@@ -25,6 +28,17 @@ fn map_statements(statement: &Statement) -> FunctionBodyStatement {
 }
 
 pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<String, Error> {
+    // map paths -> generated module id
+    let mut file_path_to_node_indices = HashMap::new();
+    let mut dfs = Dfs::new(&graph, entry_point_id);
+    while let Some(node_index) = dfs.next(&graph) {
+        let ref node = graph[node_index];
+        file_path_to_node_indices.insert(
+            node.path.display().to_string(),
+            generate_module_id(&node.source),
+        );
+    }
+
     // collect all js files into 1 big asset
     let mut result_ast = Program {
         source_type: SourceType::Script,
@@ -34,13 +48,16 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
     let mut properties = Vec::new();
     let mut dfs = Dfs::new(&graph, entry_point_id);
     while let Some(node_index) = dfs.next(&graph) {
-        let node = graph.index(node_index);
+        let ref node = graph[node_index];
+
+        let generated_module_id =
+            file_path_to_node_indices[&node.path.display().to_string()].to_string();
 
         // TODO add comment explaining which file this came from
         let property = build_ast! {
             // '<module_id>': function(module, exports, _rpack_require) { body }
             prop
-                [prop_str_key generate_module_id(&node.source)]
+                [prop_str_key {generated_module_id}]
                 [expr_func
                     [
                         [pat_id "module".to_string()],
@@ -48,7 +65,7 @@ pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Res
                         [pat_id "_rpack_require".to_string()]
                     ]
                     {
-                        node.program.body.iter().map(map_statements).collect()
+                        node.program.body.iter().map(|statement| map_statements(&file_path_to_node_indices, statement)).collect()
                     }
                 ]
         };
