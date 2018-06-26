@@ -810,6 +810,7 @@ mod literal_tests {
                 ""
             ))
         );
+        assert!(regex_literal().skip(eof()).parse("/a/\\u1234").is_err());
     }
 }
 
