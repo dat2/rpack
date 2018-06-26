@@ -395,7 +395,7 @@ where
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-literals-string-literals
-fn string_literal<I>() -> impl Parser<Input = I, Output = String>
+fn string_literal<I>() -> impl Parser<Input = I, Output = StringLiteral>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -403,7 +403,7 @@ where
     try(double_quote_string()).or(single_quote_string())
 }
 
-fn double_quote_string<I>() -> impl Parser<Input = I, Output = String>
+fn double_quote_string<I>() -> impl Parser<Input = I, Output = StringLiteral>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -426,7 +426,7 @@ where
     ))
 }
 
-fn single_quote_string<I>() -> impl Parser<Input = I, Output = String>
+fn single_quote_string<I>() -> impl Parser<Input = I, Output = StringLiteral>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -515,7 +515,7 @@ where
         )))
         .map(|digits| u32::from_str_radix(&digits, 16).unwrap())
         .then(|code_point| {
-            if code_point > 0x10FFFF {
+            if code_point > 0x0010_FFFF {
                 unexpected("code point")
                     .map(|_| ' ')
                     .message("Code point too large")
@@ -527,6 +527,76 @@ where
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-literals-regular-expression-literals
+fn regex_literal<I>() -> impl Parser<Input = I, Output = RegexLiteral>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (
+        between(token('/'), token('/'), regex_body()),
+        many::<String, _>(id_continue()),
+    ).map(|(pattern, flags)| RegexLiteral { pattern, flags })
+}
+
+fn regex_body<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (regex_first_char(), many::<String, _>(regex_char())).map(|(s, s2): (String, String)| s + &s2)
+}
+
+fn regex_first_char<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    try(regex_backslash_sequence())
+        .or(try(regex_class()))
+        .or(none_of("*/\\[\n\r\u{2028}\u{2029}".chars()).map(|c: char| c.to_string()))
+}
+
+fn regex_char<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    try(regex_backslash_sequence())
+        .or(try(regex_class()))
+        .or(none_of("/\\[\n\r\u{2028}\u{2029}".chars()).map(|c: char| c.to_string()))
+}
+
+fn regex_non_terminator<I>() -> impl Parser<Input = I, Output = char>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    none_of("\n\r\u{2028}\u{2029}".chars())
+}
+
+fn regex_backslash_sequence<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (token('\\'), regex_non_terminator()).map(|(c, s): (char, char)| c.to_string() + &s.to_string())
+}
+
+fn regex_class<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (
+        token('['),
+        many::<String, _>(
+            try(regex_backslash_sequence()).or(none_of("]\\".chars()).map(|c: char| c.to_string())),
+        ),
+        token(']'),
+    ).map(|(open, middle, end): (char, String, char)| {
+        open.to_string() + &middle + &end.to_string()
+    })
+}
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-template-literal-lexical-components
 
@@ -634,6 +704,112 @@ mod literal_tests {
             assert!(string_literal().parse(double_quote_slice).is_err());
             assert!(string_literal().parse(single_quote_slice).is_err());
         }
+    }
+
+    #[test]
+    fn test_regex_literal() {
+        // must be non empty
+        assert!(string_literal().parse("//").is_err());
+
+        // not allowed first chars
+        for c in "*\\/[".chars() {
+            let slice: &str = &format!("/{}/", c);
+            assert!(string_literal().parse(slice).is_err());
+        }
+
+        // backslash as first char
+        assert_eq!(
+            regex_literal().parse("/\\a/"),
+            Ok((
+                RegexLiteral {
+                    pattern: "\\a".to_string(),
+                    flags: String::new()
+                },
+                ""
+            ))
+        );
+
+        // character class as first char
+        assert_eq!(
+            regex_literal().parse("/[ab]/"),
+            Ok((
+                RegexLiteral {
+                    pattern: "[ab]".to_string(),
+                    flags: String::new()
+                },
+                ""
+            ))
+        );
+
+        // not allowed second chars
+        for c in "\\/[".chars() {
+            let slice: &str = &format!("/a{}/", c);
+            assert!(string_literal().parse(slice).is_err());
+        }
+
+        // backslash as second char
+        assert_eq!(
+            regex_literal().parse("/a\\a/"),
+            Ok((
+                RegexLiteral {
+                    pattern: "a\\a".to_string(),
+                    flags: String::new()
+                },
+                ""
+            ))
+        );
+
+        // character class as second char
+        assert_eq!(
+            regex_literal().parse("/a[ab]/"),
+            Ok((
+                RegexLiteral {
+                    pattern: "a[ab]".to_string(),
+                    flags: String::new()
+                },
+                ""
+            ))
+        );
+
+        // character class with unallowed chars
+        for c in "\\/]".chars() {
+            let slice: &str = &format!("/a[{}]/", c);
+            assert!(string_literal().parse(slice).is_err());
+        }
+
+        // character class with backslash
+        assert_eq!(
+            regex_literal().parse("/a[ab\\]]/"),
+            Ok((
+                RegexLiteral {
+                    pattern: "a[ab\\]]".to_string(),
+                    flags: String::new()
+                },
+                ""
+            ))
+        );
+
+        // flags
+        assert_eq!(
+            regex_literal().parse("/a/f"),
+            Ok((
+                RegexLiteral {
+                    pattern: "a".to_string(),
+                    flags: "f".to_string()
+                },
+                ""
+            ))
+        );
+        assert_eq!(
+            regex_literal().parse("/a/fi"),
+            Ok((
+                RegexLiteral {
+                    pattern: "a".to_string(),
+                    flags: "fi".to_string()
+                },
+                ""
+            ))
+        );
     }
 }
 
