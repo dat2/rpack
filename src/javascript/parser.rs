@@ -76,17 +76,6 @@ where
     whitespace().or(comment())
 }
 
-// https://www.ecma-international.org/ecma-262/8.0/index.html#prod-UnicodeEscapeSequence
-fn unicode_escape_sequence<I>() -> impl Parser<Input = I, Output = char>
-where
-    I: Stream<Item = char>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    (char('\\'), char('u'), count(4, hex_digit()))
-        .map(|(_, _, digits): (_, _, String)| u32::from_str_radix(&digits, 16).unwrap())
-        .map(|code_point| ::std::char::from_u32(code_point).unwrap())
-}
-
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-names-and-keywords
 fn satisfy_id_start(c: char) -> bool {
     UnicodeXID::is_xid_start(c) || c == '$' || c == '_'
@@ -244,12 +233,6 @@ mod lexical_tests {
     }
 
     #[test]
-    fn test_unicode_escape_sequence() {
-        assert_eq!(unicode_escape_sequence().parse(r"\u000a"), Ok(('\n', "")));
-        assert_eq!(unicode_escape_sequence().parse(r"\u2764"), Ok(('❤', "")));
-    }
-
-    #[test]
     fn test_identifier() {
         // making sure that the unicode_escape_sequence satisifies things
         // eg. ZWNJ and ZWJ are not allowed as starts
@@ -292,28 +275,28 @@ mod lexical_tests {
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-null-literals
-fn null_literal<I>() -> impl Parser<Input = I, Output = Literal>
+fn null_literal<I>() -> impl Parser<Input = I, Output = NullLiteral>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    string("null").map(|_| Literal::NullLiteral(NullLiteral))
+    string("null").map(|_| NullLiteral)
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-boolean-literals
-fn boolean_literal<I>() -> impl Parser<Input = I, Output = Literal>
+fn boolean_literal<I>() -> impl Parser<Input = I, Output = BooleanLiteral>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     choice((
-        try(string("true")).map(|_| Literal::BooleanLiteral(true)),
-        string("false").map(|_| Literal::BooleanLiteral(false)),
+        try(string("true")).map(|_| true),
+        string("false").map(|_| false),
     ))
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-literals-numeric-literals
-fn numeric_literal<I>() -> impl Parser<Input = I, Output = Literal>
+fn numeric_literal<I>() -> impl Parser<Input = I, Output = NumberLiteral>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -323,7 +306,7 @@ where
         try(octal_integer_literal()),
         try(hex_integer_literal()),
         decimal_literal(),
-    )).map(Literal::NumberLiteral)
+    ))
 }
 
 fn decimal_literal<I>() -> impl Parser<Input = I, Output = NumberLiteral>
@@ -412,6 +395,136 @@ where
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-literals-string-literals
+fn string_literal<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    try(double_quote_string()).or(single_quote_string())
+}
+
+fn double_quote_string<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    between(
+        token('"'),
+        token('"'),
+        many(double_quote_string_character()),
+    )
+}
+
+fn double_quote_string_character<I>() -> impl Parser<Input = I, Output = char>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    // U+005C (REVERSE SOLIDUS), U+000D (CARRIAGE RETURN), U+2028 (LINE SEPARATOR), U+2029 (PARAGRAPH SEPARATOR), and U+000A (LINE FEED)
+    escape_sequence().or(none_of(
+        "\u{005c}\u{000D}\u{2028}\u{2029}\u{000A}\"".chars(),
+    ))
+}
+
+fn single_quote_string<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    between(
+        token('\''),
+        token('\''),
+        many(single_quote_string_character()),
+    )
+}
+
+fn single_quote_string_character<I>() -> impl Parser<Input = I, Output = char>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    // U+005C (REVERSE SOLIDUS), U+000D (CARRIAGE RETURN), U+2028 (LINE SEPARATOR), U+2029 (PARAGRAPH SEPARATOR), and U+000A (LINE FEED)
+    escape_sequence().or(none_of("\u{005c}\u{000D}\u{2028}\u{2029}\u{000A}'".chars()))
+}
+
+fn escape_sequence<I>() -> impl Parser<Input = I, Output = char>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        try(character_escape_sequence()),
+        try(non_escape_character_sequence()),
+        try(hex_escape_sequence()),
+        // TODO legacy octal escape sequence
+        unicode_escape_sequence(),
+    ))
+}
+
+fn character_escape_sequence<I>() -> impl Parser<Input = I, Output = char>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    token('\\')
+        .with(one_of(r#"'"\bfnrtv"#.chars()))
+        .map(|c| match c {
+            'b' => '\u{8}',
+            'f' => '\u{C}',
+            'n' => '\n',
+            'r' => '\r',
+            't' => '\t',
+            'v' => '\u{B}',
+            other => other,
+        })
+}
+
+fn non_escape_character_sequence<I>() -> impl Parser<Input = I, Output = char>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    token('\\').with(none_of(
+        "'\"\\bfnrtv0123456789xu\r\n\u{2028}\u{2029}".chars(),
+    ))
+}
+
+fn hex_escape_sequence<I>() -> impl Parser<Input = I, Output = char>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    token('\\')
+        .with(token('x'))
+        .with(count::<String, _>(2, hex_digit()))
+        .map(|hex_digits| u32::from_str_radix(&hex_digits, 16).unwrap())
+        .map(|code_point| ::std::char::from_u32(code_point).unwrap())
+}
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#prod-UnicodeEscapeSequence
+fn unicode_escape_sequence<I>() -> impl Parser<Input = I, Output = char>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    token('\\')
+        .with(token('u'))
+        .with(choice((
+            between(token('{'), token('}'), count::<String, _>(6, hex_digit())),
+            count::<String, _>(4, hex_digit()),
+        )))
+        .map(|digits| u32::from_str_radix(&digits, 16).unwrap())
+        .then(|code_point| {
+            if code_point > 0x10FFFF {
+                unexpected("code point")
+                    .map(|_| ' ')
+                    .message("Code point too large")
+                    .right()
+            } else {
+                value(::std::char::from_u32(code_point).unwrap()).left()
+            }
+        })
+}
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-literals-regular-expression-literals
 
@@ -423,89 +536,104 @@ mod literal_tests {
 
     #[test]
     fn test_null_literal() {
-        assert_eq!(
-            null_literal().parse("null"),
-            Ok((Literal::NullLiteral(NullLiteral), ""))
-        );
+        assert_eq!(null_literal().parse("null"), Ok((NullLiteral, "")));
     }
 
     #[test]
     fn test_boolean_literal() {
-        assert_eq!(
-            boolean_literal().parse("true"),
-            Ok((Literal::BooleanLiteral(true), ""))
-        );
-        assert_eq!(
-            boolean_literal().parse("false"),
-            Ok((Literal::BooleanLiteral(false), ""))
-        );
+        assert_eq!(boolean_literal().parse("true"), Ok((true, "")));
+        assert_eq!(boolean_literal().parse("false"), Ok((false, "")));
     }
 
     #[test]
     fn test_number_literal() {
         // decimal
-        assert_eq!(
-            numeric_literal().parse("0"),
-            Ok((Literal::NumberLiteral(0f64), ""))
-        );
+        assert_eq!(numeric_literal().parse("0"), Ok((0f64, "")));
         assert!(numeric_literal().parse("01").is_err());
         assert!(numeric_literal().parse("01.").is_err());
-        assert_eq!(
-            numeric_literal().parse("9"),
-            Ok((Literal::NumberLiteral(9f64), ""))
-        );
-        assert_eq!(
-            numeric_literal().parse("10"),
-            Ok((Literal::NumberLiteral(10f64), ""))
-        );
-        assert_eq!(
-            numeric_literal().parse("0.1"),
-            Ok((Literal::NumberLiteral(0.1f64), ""))
-        );
-        assert_eq!(
-            numeric_literal().parse(".1"),
-            Ok((Literal::NumberLiteral(0.1f64), ""))
-        );
-        assert_eq!(
-            numeric_literal().parse("1e1"),
-            Ok((Literal::NumberLiteral(10f64), ""))
-        );
-        assert_eq!(
-            numeric_literal().parse(".1e1"),
-            Ok((Literal::NumberLiteral(1f64), ""))
-        );
-        assert_eq!(
-            numeric_literal().parse("1.1e1"),
-            Ok((Literal::NumberLiteral(11f64), ""))
-        );
+        assert_eq!(numeric_literal().parse("9"), Ok((9f64, "")));
+        assert_eq!(numeric_literal().parse("10"), Ok((10f64, "")));
+        assert_eq!(numeric_literal().parse("0.1"), Ok((0.1f64, "")));
+        assert_eq!(numeric_literal().parse(".1"), Ok((0.1f64, "")));
+        assert_eq!(numeric_literal().parse("1e1"), Ok((10f64, "")));
+        assert_eq!(numeric_literal().parse(".1e1"), Ok((1f64, "")));
+        assert_eq!(numeric_literal().parse("1.1e1"), Ok((11f64, "")));
 
         // binary
-        assert_eq!(
-            numeric_literal().parse("0b1010"),
-            Ok((Literal::NumberLiteral(10f64), ""))
-        );
-        assert_eq!(
-            numeric_literal().parse("0B1010"),
-            Ok((Literal::NumberLiteral(10f64), ""))
-        );
+        assert_eq!(numeric_literal().parse("0b1010"), Ok((10f64, "")));
+        assert_eq!(numeric_literal().parse("0B1010"), Ok((10f64, "")));
         // octal
-        assert_eq!(
-            numeric_literal().parse("0o123"),
-            Ok((Literal::NumberLiteral(83f64), ""))
-        );
-        assert_eq!(
-            numeric_literal().parse("0O123"),
-            Ok((Literal::NumberLiteral(83f64), ""))
-        );
+        assert_eq!(numeric_literal().parse("0o123"), Ok((83f64, "")));
+        assert_eq!(numeric_literal().parse("0O123"), Ok((83f64, "")));
         // hex
         assert_eq!(
             numeric_literal().parse("0xDEADBEEF"),
-            Ok((Literal::NumberLiteral(3735928559f64), ""))
+            Ok((3735928559f64, ""))
         );
         assert_eq!(
             numeric_literal().parse("0XDEADBEEF"),
-            Ok((Literal::NumberLiteral(3735928559f64), ""))
+            Ok((3735928559f64, ""))
         );
+    }
+
+    #[test]
+    fn test_string_literal() {
+        // empty
+        assert_eq!(string_literal().parse(r#""""#), Ok((String::new(), "")));
+        assert_eq!(string_literal().parse("''"), Ok((String::new(), "")));
+        // not allowed chars
+        for not_allowed_char in "\u{005c}\u{000D}\u{2028}\u{2029}\u{000A}".chars() {
+            let double_quote_slice: &str = &format!("\"{}\"", not_allowed_char);
+            let single_quote_slice: &str = &format!("'{}'", not_allowed_char);
+            assert!(string_literal().parse(double_quote_slice).is_err());
+            assert!(string_literal().parse(single_quote_slice).is_err());
+        }
+        // character escape sequences
+        for escaped_character in r#"'"\bfnrtv"#.chars() {
+            let double_quote_slice: &str = &format!("\"\\{}\"", escaped_character);
+            let single_quote_slice: &str = &format!("'\\{}'", escaped_character);
+            assert!(string_literal().parse(double_quote_slice).is_ok());
+            assert!(string_literal().parse(single_quote_slice).is_ok());
+        }
+        // non character escape sequences
+        assert_eq!(string_literal().parse("\"\\a\""), Ok(("a".to_string(), "")));
+        assert_eq!(string_literal().parse("'\\a'"), Ok(("a".to_string(), "")));
+
+        // hex escape sequence
+        assert_eq!(
+            string_literal().parse(r#""\x0A""#),
+            Ok(("\n".to_string(), ""))
+        );
+        assert_eq!(
+            string_literal().parse(r"'\x0a'"),
+            Ok(("\n".to_string(), ""))
+        );
+        // unicode escape sequence
+        assert_eq!(
+            string_literal().parse(r#""\u2764""#),
+            Ok(("❤".to_string(), ""))
+        );
+        assert_eq!(
+            string_literal().parse(r"'\u2764'"),
+            Ok(("❤".to_string(), ""))
+        );
+        assert_eq!(
+            string_literal().parse(r#""\u{2764}""#),
+            Ok(("❤".to_string(), ""))
+        );
+        assert_eq!(
+            string_literal().parse(r"'\u{2764}'"),
+            Ok(("❤".to_string(), ""))
+        );
+        assert!(string_literal().parse(r"'\u{110000}'").is_err());
+
+        // line continuation
+        for line_continuation_char in "\r\n\u{2028}\u{2029}".chars() {
+            let double_quote_slice: &str = &format!("\"\\{}\"", line_continuation_char);
+            let single_quote_slice: &str = &format!("'\\{}'", line_continuation_char);
+            assert!(string_literal().parse(double_quote_slice).is_err());
+            assert!(string_literal().parse(single_quote_slice).is_err());
+        }
     }
 }
 
@@ -518,18 +646,6 @@ mod literal_tests {
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-scripts-and-modules
 
 // https://facebook.github.io/jsx/
-
-// statement
-
-// whitespace utils
-
-fn string_literal<I>() -> impl Parser<Input = I, Output = String>
-where
-    I: Stream<Item = char>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    between(token('\''), token('\''), many(none_of("'".chars())))
-}
 
 // statements
 fn import_statement<I>() -> impl Parser<Input = I, Output = Statement>
