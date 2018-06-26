@@ -8,15 +8,7 @@ clap = "2.31.2"
 combine = "3.3.2"
 failure = "0.1.1"
 hex = "0.3.2"
+lazy_static = "1.0.1"
 petgraph = "0.4.12"
 ring = "0.12.1"
-victoria-dom = "0.1.2"
-
-[dependencies.easter]
-git = "https://github.com/dherman/esprit"
-
-[dependencies.esprit]
-git = "https://github.com/dherman/esprit"
-
-[dependencies.joker]
-git = "https://github.com/dherman/esprit"
+unicode-xid = "0.1.0"

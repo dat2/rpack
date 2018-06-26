@@ -1,5 +1,87 @@
 use std::collections::HashMap;
 
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-statements-and-declarations
+#[derive(Debug, Clone)]
+pub enum Statement {
+    // BlockStatement:
+    //   Block
+    // Block
+    // { StatementList }
+    // StatementList
+    //   StatementListItem
+    //   StatementList StatementListItem
+    Block {
+        body: BlockStatement,
+    },
+    Expression {
+        expression: Expression,
+    },
+    Empty,
+    Debugger,
+    With {
+        object: Expression,
+        body: Box<Statement>,
+    },
+    Return {
+        argument: Option<Expression>,
+    },
+    Label {
+        label: Id,
+        body: Box<Statement>,
+    },
+    Break {
+        label: Option<Id>,
+    },
+    Continue {
+        label: Option<Id>,
+    },
+    If {
+        test: Expression,
+        consequent: Box<Statement>,
+        alternate: Option<Box<Statement>>,
+    },
+    Switch {
+        discriminant: Expression,
+        cases: Vec<SwitchCase>,
+    },
+    Throw {
+        argument: Expression,
+    },
+    Try {
+        block: BlockStatement,
+        handler: Option<CatchClause>,
+        finalizer: Option<BlockStatement>,
+    },
+    While {
+        test: Expression,
+        body: Box<Statement>,
+    },
+    DoWhile {
+        body: Box<Statement>,
+        test: Expression,
+    },
+    For {
+        init: Option<ForInit>,
+        test: Option<Expression>,
+        update: Option<Expression>,
+        body: Box<Statement>,
+    },
+    // For In and For Of (ES2015)
+    ForInOf {
+        left: ForInLeft,
+        right: Expression,
+        body: Box<Statement>,
+    },
+    FunctionDeclaration {
+        declaration: FunctionDeclaration,
+    },
+    VariableDeclaration {
+        declaration: VariableDeclaration,
+    },
+    // ES2015
+    Import(ImportSpecifier, StringLiteral),
+}
+
 // TODO source tracking
 #[derive(Debug, Clone)]
 pub struct Position {
@@ -75,81 +157,6 @@ pub enum FunctionBodyStatement {
 pub type FunctionBody = Vec<FunctionBodyStatement>;
 
 // statements
-#[derive(Debug, Clone)]
-pub enum Statement {
-    // ES5
-    Expression {
-        expression: Expression,
-    },
-    Block {
-        body: BlockStatement,
-    },
-    Empty,
-    Debugger,
-    With {
-        object: Expression,
-        body: Box<Statement>,
-    },
-    Return {
-        argument: Option<Expression>,
-    },
-    Label {
-        label: Id,
-        body: Box<Statement>,
-    },
-    Break {
-        label: Option<Id>,
-    },
-    Continue {
-        label: Option<Id>,
-    },
-    If {
-        test: Expression,
-        consequent: Box<Statement>,
-        alternate: Option<Box<Statement>>,
-    },
-    Switch {
-        discriminant: Expression,
-        cases: Vec<SwitchCase>,
-    },
-    Throw {
-        argument: Expression,
-    },
-    Try {
-        block: BlockStatement,
-        handler: Option<CatchClause>,
-        finalizer: Option<BlockStatement>,
-    },
-    While {
-        test: Expression,
-        body: Box<Statement>,
-    },
-    DoWhile {
-        body: Box<Statement>,
-        test: Expression,
-    },
-    For {
-        init: Option<ForInit>,
-        test: Option<Expression>,
-        update: Option<Expression>,
-        body: Box<Statement>,
-    },
-    // For In and For Of (ES2015)
-    ForInOf {
-        left: ForInLeft,
-        right: Expression,
-        body: Box<Statement>,
-    },
-    FunctionDeclaration {
-        declaration: FunctionDeclaration,
-    },
-    VariableDeclaration {
-        declaration: VariableDeclaration,
-    },
-    // ES2015
-    Import(ImportSpecifier, StringLiteral),
-}
-
 #[derive(Debug, Clone)]
 pub struct SwitchCase {
     // default has no test

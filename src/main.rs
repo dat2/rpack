@@ -1,13 +1,12 @@
 extern crate clap;
 extern crate combine;
-extern crate easter;
-extern crate esprit;
 extern crate failure;
 extern crate hex;
-extern crate joker;
+#[macro_use]
+extern crate lazy_static;
 extern crate petgraph;
 extern crate ring;
-extern crate victoria_dom;
+extern crate unicode_xid;
 
 #[macro_use]
 mod javascript;
