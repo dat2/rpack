@@ -94,7 +94,7 @@ where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    try(unicode_escape_sequence().then(|c| {
+    try(unicode_escape_sequence().map(|x| x.0).then(|c| {
         if satisfy_id_start(c) {
             value(c).left()
         } else {
@@ -121,7 +121,7 @@ where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    try(unicode_escape_sequence().then(|c| {
+    try(unicode_escape_sequence().map(|x| x.0).then(|c| {
         if satisfy_id_continue(c) {
             value(c).left()
         } else {
@@ -421,7 +421,7 @@ where
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     // U+005C (REVERSE SOLIDUS), U+000D (CARRIAGE RETURN), U+2028 (LINE SEPARATOR), U+2029 (PARAGRAPH SEPARATOR), and U+000A (LINE FEED)
-    escape_sequence().or(none_of(
+    escape_sequence().map(|x| x.0).or(none_of(
         "\u{005c}\u{000D}\u{2028}\u{2029}\u{000A}\"".chars(),
     ))
 }
@@ -444,10 +444,15 @@ where
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     // U+005C (REVERSE SOLIDUS), U+000D (CARRIAGE RETURN), U+2028 (LINE SEPARATOR), U+2029 (PARAGRAPH SEPARATOR), and U+000A (LINE FEED)
-    escape_sequence().or(none_of("\u{005c}\u{000D}\u{2028}\u{2029}\u{000A}'".chars()))
+    escape_sequence()
+        .map(|x| x.0)
+        .or(none_of("\u{005c}\u{000D}\u{2028}\u{2029}\u{000A}'".chars()))
 }
 
-fn escape_sequence<I>() -> impl Parser<Input = I, Output = char>
+// (char, String) is "cooked" and "raw"
+// this is for template elements, to be able to get access to the raw string
+// this makes things uglier, but oh well
+fn escape_sequence<I>() -> impl Parser<Input = I, Output = (char, String)>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -461,69 +466,84 @@ where
     ))
 }
 
-fn character_escape_sequence<I>() -> impl Parser<Input = I, Output = char>
+fn character_escape_sequence<I>() -> impl Parser<Input = I, Output = (char, String)>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     token('\\')
-        .with(one_of(r#"'"\bfnrtv"#.chars()))
-        .map(|c| match c {
-            'b' => '\u{8}',
-            'f' => '\u{C}',
-            'n' => '\n',
-            'r' => '\r',
-            't' => '\t',
-            'v' => '\u{B}',
-            other => other,
+        .and(one_of(r#"'"\bfnrtv"#.chars()))
+        .map(|(t, c)| {
+            let cooked = match c {
+                'b' => '\u{8}',
+                'f' => '\u{C}',
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                'v' => '\u{B}',
+                other => other,
+            };
+            (cooked, format!("{}{}", t, c,))
         })
 }
 
-fn non_escape_character_sequence<I>() -> impl Parser<Input = I, Output = char>
-where
-    I: Stream<Item = char>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    token('\\').with(none_of(
-        "'\"\\bfnrtv0123456789xu\r\n\u{2028}\u{2029}".chars(),
-    ))
-}
-
-fn hex_escape_sequence<I>() -> impl Parser<Input = I, Output = char>
+fn non_escape_character_sequence<I>() -> impl Parser<Input = I, Output = (char, String)>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     token('\\')
-        .with(token('x'))
-        .with(count::<String, _>(2, hex_digit()))
-        .map(|hex_digits| u32::from_str_radix(&hex_digits, 16).unwrap())
-        .map(|code_point| ::std::char::from_u32(code_point).unwrap())
+        .and(none_of(
+            "'\"\\bfnrtv0123456789xu\r\n\u{2028}\u{2029}".chars(),
+        ))
+        .map(|(t, c)| (c, format!("{}{}", t, c)))
+}
+
+fn hex_escape_sequence<I>() -> impl Parser<Input = I, Output = (char, String)>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (token('\\'), token('x'), count::<String, _>(2, hex_digit())).map(|(t, x, hex_digits)| {
+        let code_point = u32::from_str_radix(&hex_digits, 16).unwrap();
+        let cooked = ::std::char::from_u32(code_point).unwrap();
+        (cooked, format!("{}{}{}", t, x, hex_digits))
+    })
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#prod-UnicodeEscapeSequence
-fn unicode_escape_sequence<I>() -> impl Parser<Input = I, Output = char>
+fn unicode_escape_sequence<I>() -> impl Parser<Input = I, Output = (char, String)>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    token('\\')
-        .with(token('u'))
-        .with(choice((
-            between(token('{'), token('}'), count::<String, _>(6, hex_digit())),
+    (
+        token('\\'),
+        token('u'),
+        choice((
+            (token('{'), count::<String, _>(6, hex_digit()), token('}')).map(
+                |(s, digits, e): (char, String, char)| s.to_string() + &digits + &e.to_string(),
+            ),
             count::<String, _>(4, hex_digit()),
-        )))
-        .map(|digits| u32::from_str_radix(&digits, 16).unwrap())
-        .then(|code_point| {
-            if code_point > 0x0010_FFFF {
-                unexpected("code point")
-                    .map(|_| ' ')
-                    .message("Code point too large")
-                    .right()
-            } else {
-                value(::std::char::from_u32(code_point).unwrap()).left()
-            }
-        })
+        )),
+    ).then(|(t, u, digits_raw)| {
+        let digits_cooked = if &digits_raw[0..1] == "{" {
+            &digits_raw[1..digits_raw.len() - 1]
+        } else {
+            &digits_raw[..]
+        };
+        let code_point = u32::from_str_radix(digits_cooked, 16).unwrap();
+        if code_point > 0x0010_FFFF {
+            unexpected("code point")
+                .map(|_| (' ', String::new()))
+                .message("Code point too large")
+                .right()
+        } else {
+            let cooked = ::std::char::from_u32(code_point).unwrap();
+            let raw = format!("{}{}{}", t, u, digits_raw);
+            value((cooked, raw)).left()
+        }
+    })
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-literals-regular-expression-literals
@@ -599,6 +619,96 @@ where
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-template-literal-lexical-components
+fn template<I>() -> impl Parser<Input = I, Output = TemplateElement>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((try(no_substition_template()), template_head()))
+}
+
+fn no_substition_template<I>() -> impl Parser<Input = I, Output = TemplateElement>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    between(
+        token('`'),
+        token('`'),
+        many::<Vec<_>, _>(template_character()),
+    ).map(|pairs| {
+        let cooked = pairs.iter().cloned().map(|x| x.0).collect();
+        let raw = pairs.iter().cloned().map(|x| x.1).collect();
+        TemplateElement { cooked, raw }
+    })
+}
+
+fn template_head<I>() -> impl Parser<Input = I, Output = TemplateElement>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    between(
+        token('`'),
+        string("${"),
+        many::<Vec<_>, _>(template_character()),
+    ).map(|pairs| {
+        let cooked = pairs.iter().cloned().map(|x| x.0).collect();
+        let raw = pairs.iter().cloned().map(|x| x.1).collect();
+        TemplateElement { cooked, raw }
+    })
+}
+
+fn template_character<I>() -> impl Parser<Input = I, Output = (char, String)>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        try(token('$').skip(not_followed_by(token('{')))).map(|x: char| (x, x.to_string())),
+        try(escape_sequence()),
+        try(one_of("\r\n\u{2028}\u{2029}".chars())).map(|x: char| (x, x.to_string())),
+        none_of("`\\$".chars()).map(|x: char| (x, x.to_string())),
+    ))
+}
+
+fn template_substition_tail<I>() -> impl Parser<Input = I, Output = TemplateElement>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((try(template_middle()), template_tail()))
+}
+
+fn template_middle<I>() -> impl Parser<Input = I, Output = TemplateElement>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    between(
+        token('}'),
+        string("${"),
+        many::<Vec<_>, _>(template_character()),
+    ).map(|pairs| {
+        let cooked = pairs.iter().cloned().map(|x| x.0).collect();
+        let raw = pairs.iter().cloned().map(|x| x.1).collect();
+        TemplateElement { cooked, raw }
+    })
+}
+
+fn template_tail<I>() -> impl Parser<Input = I, Output = TemplateElement>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    token('}')
+        .with(many::<Vec<_>, _>(template_character()))
+        .map(|pairs| {
+            let cooked = pairs.iter().cloned().map(|x| x.0).collect();
+            let raw = pairs.iter().cloned().map(|x| x.1).collect();
+            TemplateElement { cooked, raw }
+        })
+}
 
 #[cfg(test)]
 mod literal_tests {
@@ -811,6 +921,103 @@ mod literal_tests {
             ))
         );
         assert!(regex_literal().skip(eof()).parse("/a/\\u1234").is_err());
+    }
+
+    #[test]
+    fn test_template_elements() {
+        // empty
+        assert_eq!(
+            template().parse("``"),
+            Ok((
+                TemplateElement {
+                    cooked: "".to_string(),
+                    raw: "".to_string(),
+                },
+                ""
+            ))
+        );
+
+        // no_substitution_template
+        assert_eq!(
+            template().parse("`asd`"),
+            Ok((
+                TemplateElement {
+                    cooked: "asd".to_string(),
+                    raw: "asd".to_string(),
+                },
+                ""
+            ))
+        );
+
+        // template_head
+        assert_eq!(
+            template().parse("`asd ${eval}`"),
+            Ok((
+                TemplateElement {
+                    cooked: "asd ".to_string(),
+                    raw: "asd ".to_string()
+                },
+                "eval}`"
+            ))
+        );
+
+        // template_middle
+        assert_eq!(
+            template_substition_tail().parse("} asd ${eval}`"),
+            Ok((
+                TemplateElement {
+                    cooked: " asd ".to_string(),
+                    raw: " asd ".to_string()
+                },
+                "eval}`"
+            ))
+        );
+
+        // template_tail
+        assert_eq!(
+            template_substition_tail().parse("} asd"),
+            Ok((
+                TemplateElement {
+                    cooked: " asd".to_string(),
+                    raw: " asd".to_string()
+                },
+                ""
+            ))
+        );
+
+        // $
+        assert_eq!(
+            template_character().parse("$123"),
+            Ok((('$', "$".to_string()), "123"))
+        );
+        // escape sequence
+        assert_eq!(
+            template_character().parse("\\n"),
+            Ok((('\n', "\\n".to_string()), ""))
+        );
+        assert_eq!(
+            template_character().parse("\\x0A"),
+            Ok((('\n', "\\x0A".to_string()), ""))
+        );
+        assert_eq!(
+            template_character().parse("\\u2764"),
+            Ok((('❤', "\\u2764".to_string()), ""))
+        );
+        assert_eq!(
+            template_character().parse("\\u{2764}"),
+            Ok((('❤', "\\u{2764}".to_string()), ""))
+        );
+        // line continuation
+        for line_continuation_char in "\r\n\u{2028}\u{2029}".chars() {
+            let slice: &str = &line_continuation_char.to_string();
+            assert_eq!(
+                template_character().parse(slice),
+                Ok((
+                    (line_continuation_char, line_continuation_char.to_string()),
+                    ""
+                ))
+            );
+        }
     }
 }
 

@@ -20,6 +20,12 @@ pub struct RegexLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct TemplateElement {
+    pub cooked: String,
+    pub raw: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     StringLiteral(StringLiteral),
     BooleanLiteral(BooleanLiteral),
@@ -29,7 +35,7 @@ pub enum Literal {
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-statements-and-declarations
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     // BlockStatement:
     //   Block
@@ -111,26 +117,26 @@ pub enum Statement {
 }
 
 // TODO source tracking
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Position {
     pub line: usize,
     pub column: usize,
 }
 // program
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub source_type: SourceType,
     pub body: Vec<Statement>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SourceType {
     Script,
     Module,
 }
 
 // functions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Function {
     pub id: Option<Id>,
     pub params: Vec<Pattern>,
@@ -139,7 +145,7 @@ pub struct Function {
     pub generator: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Directive {
     pub expression: Literal,
     pub directive: String,
@@ -147,7 +153,7 @@ pub struct Directive {
 
 pub type BlockStatement = Vec<Statement>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FunctionBodyStatement {
     Statement(Statement),
     Directive(Directive),
@@ -156,32 +162,32 @@ pub enum FunctionBodyStatement {
 pub type FunctionBody = Vec<FunctionBodyStatement>;
 
 // statements
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SwitchCase {
     // default has no test
     test: Option<Expression>,
     consequent: Vec<Statement>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CatchClause {
     param: Pattern,
     body: Vec<Statement>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ForInit {
     VariableDeclaration(VariableDeclaration),
     Expression(Expression),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ForInLeft {
     VariableDeclaration(VariableDeclaration),
     Pattern(Pattern),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ImportSpecifier {
     // import {foo, bar, baz as qux} from './mod'
     Import(HashMap<Id, Id>),
@@ -192,19 +198,19 @@ pub enum ImportSpecifier {
 }
 
 // declarations
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDeclaration {
     pub id: Id,
     pub function: Function,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VariableDeclaration {
     pub kind: VariableDeclarationKind,
     pub declarations: Vec<VariableDeclarator>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum VariableDeclarationKind {
     Var,
     // ES2015
@@ -212,14 +218,14 @@ pub enum VariableDeclarationKind {
     Const,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VariableDeclarator {
     pub id: Pattern,
     pub init: Option<Expression>,
 }
 
 // expressions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     Id {
         id: Id,
@@ -308,6 +314,7 @@ pub enum Expression {
         quasis: Vec<TemplateElement>,
         expressions: Vec<Expression>,
     },
+    // ES2015
     TaggedTemplate {
         tag: Box<Expression>,
         // quasi can only be a TemplateLiteral
@@ -315,14 +322,14 @@ pub enum Expression {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Property {
     pub key: PropertyKey,
     pub value: Expression,
     pub kind: PropertyKind,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PropertyKey {
     Literal(Literal),
     Id(Id),
@@ -330,14 +337,14 @@ pub enum PropertyKey {
     Expression(Expression),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PropertyKind {
     Init,
     Get,
     Set,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOperator {
     // -
     Minus,
@@ -352,7 +359,7 @@ pub enum UnaryOperator {
     Delete,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UpdateOperator {
     // ++
     Increment,
@@ -360,7 +367,7 @@ pub enum UpdateOperator {
     Decrement,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOperator {
     // ==
     EqEq,
@@ -408,7 +415,7 @@ pub enum BinaryOperator {
     InstanceOf,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AssignmentOperator {
     // =
     Eq,
@@ -436,27 +443,20 @@ pub enum AssignmentOperator {
     BitwiseAndEq,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AssignmentLeft {
     Pattern(Pattern),
     Expression(Expression),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ArrowFunctionBody {
     FunctionBody(FunctionBody),
     Expression(Expression),
 }
 
-#[derive(Debug, Clone)]
-pub struct TemplateElement {
-    tail: bool,
-    value_cooked: String,
-    value_raw: String,
-}
-
 // patterns
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     Id {
         id: Id,
