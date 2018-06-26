@@ -1,10 +1,10 @@
 use combine::error::ParseError;
-use combine::parser::char::{char, crlf, hex_digit, letter, newline, spaces, string, tab};
-use combine::parser::choice::choice;
-use combine::parser::combinator::try;
+use combine::parser::char::{char, crlf, digit, hex_digit, newline, spaces, string};
+use combine::parser::choice::{choice, optional};
+use combine::parser::combinator::{not_followed_by, try};
 use combine::parser::error::unexpected;
-use combine::parser::item::{none_of, satisfy, token, value};
-use combine::parser::repeat::{count, many, sep_by, skip_many, skip_until};
+use combine::parser::item::{none_of, one_of, satisfy, token, value};
+use combine::parser::repeat::{count, many, many1, sep_by, skip_until};
 use combine::parser::sequence::between;
 use combine::stream::state::State;
 use combine::{eof, Parser, Stream};
@@ -25,12 +25,12 @@ where
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-line-terminators
+// <LF> | <CR> | <LS> | <PS> | <CRLF>
 fn line_terminator<I>() -> impl Parser<Input = I, Output = ()>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    // <LF> | <CR> | <LS> | <PS> | <CRLF>
     newline()
         .or(char('\u{000D}'))
         .or(char('\u{2028}'))
@@ -66,6 +66,14 @@ where
         skip_until(line_terminator()),
         line_terminator(),
     ).map(|_| ())
+}
+
+fn skip_tokens<I>() -> impl Parser<Input = I, Output = ()>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    whitespace().or(comment())
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#prod-UnicodeEscapeSequence
@@ -283,48 +291,237 @@ mod lexical_tests {
     }
 }
 
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-null-literals
+fn null_literal<I>() -> impl Parser<Input = I, Output = Literal>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    string("null").map(|_| Literal::NullLiteral(NullLiteral))
+}
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-boolean-literals
+fn boolean_literal<I>() -> impl Parser<Input = I, Output = Literal>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        try(string("true")).map(|_| Literal::BooleanLiteral(true)),
+        string("false").map(|_| Literal::BooleanLiteral(false)),
+    ))
+}
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-literals-numeric-literals
+fn numeric_literal<I>() -> impl Parser<Input = I, Output = Literal>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        try(binary_integer_literal()),
+        try(octal_integer_literal()),
+        try(hex_integer_literal()),
+        decimal_literal(),
+    )).map(Literal::NumberLiteral)
+}
+
+fn decimal_literal<I>() -> impl Parser<Input = I, Output = NumberLiteral>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (
+        optional(decimal_integer_literal()),
+        optional(
+            (token('.'), many::<String, _>(digit()))
+                .map(|(c, s): (char, String)| c.to_string() + &s),
+        ),
+        optional(exponent_part()),
+    ).map(|(literal_opt, digits_opt, exponent_opt)| {
+            literal_opt.unwrap_or_else(String::new)
+                + &digits_opt.unwrap_or_else(String::new)
+                + &exponent_opt.unwrap_or_else(String::new)
+        })
+        .map(|s| s.parse::<f64>().unwrap())
+}
+
+fn decimal_integer_literal<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        string("0").skip(not_followed_by(digit())).map(String::from),
+        (one_of("123456789".chars()), many::<String, _>(digit()))
+            .map(|(c, s): (char, String)| c.to_string() + &s),
+    ))
+}
+
+fn exponent_part<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (
+        token('e').or(token('E')),
+        optional(token('-').or(token('+'))),
+        many1::<String, _>(digit()),
+    ).map(
+        |(e, sign_opt, digits): (char, Option<char>, String)| match sign_opt {
+            Some(sign) => e.to_string() + &sign.to_string() + &digits,
+            None => e.to_string() + &digits,
+        },
+    )
+}
+
+fn binary_integer_literal<I>() -> impl Parser<Input = I, Output = NumberLiteral>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (
+        token('0'),
+        token('b').or(token('B')),
+        many1::<String, _>(one_of("01".chars())),
+    ).map(|(_, _, digits)| i64::from_str_radix(&digits, 2).unwrap() as f64)
+}
+
+fn octal_integer_literal<I>() -> impl Parser<Input = I, Output = NumberLiteral>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (
+        token('0'),
+        token('o').or(token('O')),
+        many1::<String, _>(one_of("01234567".chars())),
+    ).map(|(_, _, digits)| i64::from_str_radix(&digits, 8).unwrap() as f64)
+}
+
+fn hex_integer_literal<I>() -> impl Parser<Input = I, Output = NumberLiteral>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (
+        token('0'),
+        token('x').or(token('X')),
+        many1::<String, _>(hex_digit()),
+    ).map(|(_, _, digits)| i64::from_str_radix(&digits, 16).unwrap() as f64)
+}
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-literals-string-literals
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-literals-regular-expression-literals
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-template-literal-lexical-components
+
+#[cfg(test)]
+mod literal_tests {
+    use super::*;
+
+    #[test]
+    fn test_null_literal() {
+        assert_eq!(
+            null_literal().parse("null"),
+            Ok((Literal::NullLiteral(NullLiteral), ""))
+        );
+    }
+
+    #[test]
+    fn test_boolean_literal() {
+        assert_eq!(
+            boolean_literal().parse("true"),
+            Ok((Literal::BooleanLiteral(true), ""))
+        );
+        assert_eq!(
+            boolean_literal().parse("false"),
+            Ok((Literal::BooleanLiteral(false), ""))
+        );
+    }
+
+    #[test]
+    fn test_number_literal() {
+        // decimal
+        assert_eq!(
+            numeric_literal().parse("0"),
+            Ok((Literal::NumberLiteral(0f64), ""))
+        );
+        assert!(numeric_literal().parse("01").is_err());
+        assert!(numeric_literal().parse("01.").is_err());
+        assert_eq!(
+            numeric_literal().parse("9"),
+            Ok((Literal::NumberLiteral(9f64), ""))
+        );
+        assert_eq!(
+            numeric_literal().parse("10"),
+            Ok((Literal::NumberLiteral(10f64), ""))
+        );
+        assert_eq!(
+            numeric_literal().parse("0.1"),
+            Ok((Literal::NumberLiteral(0.1f64), ""))
+        );
+        assert_eq!(
+            numeric_literal().parse(".1"),
+            Ok((Literal::NumberLiteral(0.1f64), ""))
+        );
+        assert_eq!(
+            numeric_literal().parse("1e1"),
+            Ok((Literal::NumberLiteral(10f64), ""))
+        );
+        assert_eq!(
+            numeric_literal().parse(".1e1"),
+            Ok((Literal::NumberLiteral(1f64), ""))
+        );
+        assert_eq!(
+            numeric_literal().parse("1.1e1"),
+            Ok((Literal::NumberLiteral(11f64), ""))
+        );
+
+        // binary
+        assert_eq!(
+            numeric_literal().parse("0b1010"),
+            Ok((Literal::NumberLiteral(10f64), ""))
+        );
+        assert_eq!(
+            numeric_literal().parse("0B1010"),
+            Ok((Literal::NumberLiteral(10f64), ""))
+        );
+        // octal
+        assert_eq!(
+            numeric_literal().parse("0o123"),
+            Ok((Literal::NumberLiteral(83f64), ""))
+        );
+        assert_eq!(
+            numeric_literal().parse("0O123"),
+            Ok((Literal::NumberLiteral(83f64), ""))
+        );
+        // hex
+        assert_eq!(
+            numeric_literal().parse("0xDEADBEEF"),
+            Ok((Literal::NumberLiteral(3735928559f64), ""))
+        );
+        assert_eq!(
+            numeric_literal().parse("0XDEADBEEF"),
+            Ok((Literal::NumberLiteral(3735928559f64), ""))
+        );
+    }
+}
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-expressions
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-statements-and-declarations
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-functions-and-classes
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-scripts-and-modules
+
+// https://facebook.github.io/jsx/
+
 // statement
 
 // whitespace utils
-fn ws<I>() -> impl Parser<Input = I, Output = ()>
-where
-    I: Stream<Item = char>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    skip_many(char(' ').or(tab()))
-}
-
-fn eol<I>() -> impl Parser<Input = I, Output = ()>
-where
-    I: Stream<Item = char>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    spaces()
-}
-// lexer things
-fn reserved<I>(word: &'static str) -> impl Parser<Input = I, Output = &'static str>
-where
-    I: Stream<Item = char>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    string(word).skip(ws())
-}
-
-fn id<I>() -> impl Parser<Input = I, Output = String>
-where
-    I: Stream<Item = char>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
-{
-    many(letter().or(token('_')))
-        .map(|vec: Vec<char>| vec.into_iter().collect())
-        .then(|s: String| match s.as_ref() {
-            "function" | "import" | "from" => {
-                unexpected("reserved word").map(|_| String::new()).right()
-            }
-            _ => value(s).left(),
-        })
-        .skip(ws())
-}
 
 fn string_literal<I>() -> impl Parser<Input = I, Output = String>
 where
@@ -341,12 +538,15 @@ where
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     (
-        reserved("import"),
-        id(),
-        reserved("from"),
+        string("import"),
+        skip_tokens(),
+        identifier(),
+        skip_tokens(),
+        string("from"),
+        skip_tokens(),
         string_literal(),
-        eol(),
-    ).map(|(_, id, _, string_lit, _)| {
+        skip_tokens(),
+    ).map(|(_, _, id, _, _, _, string_lit, _)| {
         Statement::Import(ImportSpecifier::ImportDefault(id), string_lit)
     })
 }
@@ -357,36 +557,40 @@ where
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     (
-        reserved("function"),
-        id(),
+        string("function"),
+        skip_tokens(),
+        identifier(),
+        skip_tokens(),
         between(
-            token('(').skip(ws()),
-            token(')').skip(ws()),
-            sep_by::<Vec<_>, _, _>(id(), token(',').skip(ws())),
+            token('(').skip(skip_tokens()),
+            token(')').skip(skip_tokens()),
+            sep_by::<Vec<_>, _, _>(identifier(), token(',').skip(skip_tokens())),
         ),
         between(
-            token('{').skip(eol()),
+            token('{').skip(skip_tokens()),
             token('}'),
             many::<Vec<_>, _>(statement()),
         ),
-        eol(),
-    ).map(|(_, id, params, body, _)| Statement::FunctionDeclaration {
-        declaration: FunctionDeclaration {
-            id: id.clone(),
-            function: Function {
-                id: Some(id),
-                params: params
-                    .iter()
-                    .map(|id| Pattern::Id { id: id.clone() })
-                    .collect(),
-                body: body
-                    .iter()
-                    .map(|stmt| FunctionBodyStatement::Statement(stmt.clone()))
-                    .collect(),
-                generator: false,
+        skip_tokens(),
+    ).map(
+        |(_, _, id, _, params, body, _)| Statement::FunctionDeclaration {
+            declaration: FunctionDeclaration {
+                id: id.clone(),
+                function: Function {
+                    id: Some(id),
+                    params: params
+                        .iter()
+                        .map(|id| Pattern::Id { id: id.clone() })
+                        .collect(),
+                    body: body
+                        .iter()
+                        .map(|stmt| FunctionBodyStatement::Statement(stmt.clone()))
+                        .collect(),
+                    generator: false,
+                },
             },
         },
-    })
+    )
 }
 
 fn var_declaration_kind<I>() -> impl Parser<Input = I, Output = VariableDeclarationKind>
@@ -395,9 +599,9 @@ where
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     choice((
-        try(reserved("var")).map(|_| VariableDeclarationKind::Var),
-        try(reserved("let")).map(|_| VariableDeclarationKind::Let),
-        reserved("const").map(|_| VariableDeclarationKind::Const),
+        try(string("var")).map(|_| VariableDeclarationKind::Var),
+        try(string("let")).map(|_| VariableDeclarationKind::Let),
+        string("const").map(|_| VariableDeclarationKind::Const),
     ))
 }
 
@@ -406,7 +610,12 @@ where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    (var_declaration_kind(), id(), eol()).map(|(kind, id, _)| Statement::VariableDeclaration {
+    (
+        var_declaration_kind(),
+        skip_tokens(),
+        identifier(),
+        skip_tokens(),
+    ).map(|(kind, _, id, _)| Statement::VariableDeclaration {
         declaration: VariableDeclaration {
             kind,
             declarations: vec![VariableDeclarator {

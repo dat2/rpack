@@ -1,5 +1,33 @@
 use std::collections::HashMap;
 
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-identifier-names
+pub type Id = String;
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-lexical-grammar-literals
+pub type StringLiteral = String;
+
+pub type BooleanLiteral = bool;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NullLiteral;
+
+pub type NumberLiteral = f64;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RegexLiteral {
+    pub pattern: String,
+    pub flags: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Literal {
+    StringLiteral(StringLiteral),
+    BooleanLiteral(BooleanLiteral),
+    NullLiteral(NullLiteral),
+    NumberLiteral(NumberLiteral),
+    RegexLiteral(RegexLiteral),
+}
+
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-statements-and-declarations
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -88,35 +116,6 @@ pub struct Position {
     pub line: usize,
     pub column: usize,
 }
-
-// identifiers
-pub type Id = String;
-
-// literals
-pub type StringLiteral = String;
-
-pub type BooleanLiteral = bool;
-
-#[derive(Debug, Clone)]
-pub struct NullLiteral;
-
-pub type NumberLiteral = f64;
-
-#[derive(Debug, Clone)]
-pub struct RegexLiteral {
-    pub pattern: String,
-    pub flags: String,
-}
-
-#[derive(Debug, Clone)]
-pub enum Literal {
-    StringLiteral(StringLiteral),
-    BooleanLiteral(BooleanLiteral),
-    NullLiteral(NullLiteral),
-    NumberLiteral(NumberLiteral),
-    RegexLiteral(RegexLiteral),
-}
-
 // program
 #[derive(Debug, Clone)]
 pub struct Program {
