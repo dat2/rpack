@@ -1034,7 +1034,8 @@ where
         try(this()),
         try(identifier_reference()),
         try(literal()),
-        array_literal(),
+        try(array_literal()),
+        jsx_element(),
     ))
 }
 
@@ -1131,13 +1132,77 @@ where
     (
         string("yield"),
         skip_tokens(),
-        optional(token('*')),
+        // optional((optional(token('*')), ok())),
         skip_tokens(),
-        // optional(assignment_expression())
-    ).map(|(_, _, opt_star, _)| Expression::Yield {
+    ).map(|(_, _, _)| Expression::Yield {
         argument: None,
-        delegate: opt_star.is_some(),
+        delegate: false,
     })
+}
+
+// https://facebook.github.io/jsx/
+fn jsx_element<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((try(jsx_self_closing_element()), jsx_matched_element()))
+}
+
+fn jsx_self_closing_element<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    between(token('<'), string("/>"), identifier()).map(|name| Expression::JsxElement {
+        name,
+        attributes: Vec::new(),
+    })
+}
+
+fn jsx_matched_element<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (jsx_opening_element(), skip_tokens(), jsx_closing_element()).then(
+        |(opening, _, closing_name)| {
+            if let Expression::JsxElement { name, .. } = &opening {
+                if *name == closing_name {
+                    value(opening.clone()).left()
+                } else {
+                    unexpected("closing element")
+                        .map(|_| Expression::JsxElement {
+                            name: String::new(),
+                            attributes: Vec::new(),
+                        })
+                        .message("closing name is not the same as opening name")
+                        .right()
+                }
+            } else {
+                unreachable!()
+            }
+        },
+    )
+}
+
+fn jsx_opening_element<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    between(token('<'), string(">"), identifier()).map(|name| Expression::JsxElement {
+        name,
+        attributes: Vec::new(),
+    })
+}
+
+fn jsx_closing_element<I>() -> impl Parser<Input = I, Output = String>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    between(string("</"), token('>'), identifier())
 }
 
 #[cfg(test)]
@@ -1267,9 +1332,32 @@ mod expression_test {
             ))
         );
     }
-}
 
-// https://facebook.github.io/jsx/
+    #[test]
+    fn test_jsx() {
+        assert_eq!(
+            primary_expression().parse("<div/>"),
+            Ok((
+                Expression::JsxElement {
+                    name: "div".to_string(),
+                    attributes: Vec::new()
+                },
+                ""
+            ))
+        );
+        assert_eq!(
+            primary_expression().parse("<div>\n\n</div>"),
+            Ok((
+                Expression::JsxElement {
+                    name: "div".to_string(),
+                    attributes: Vec::new()
+                },
+                ""
+            ))
+        );
+        assert!(primary_expression().parse("<div>\n\n</v>").is_err());
+    }
+}
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-statements-and-declarations
 

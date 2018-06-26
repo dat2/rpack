@@ -141,6 +141,12 @@ pub enum Expression {
     Comma {
         expressions: Vec<Expression>,
     },
+    // https://facebook.github.io/jsx/
+    JsxElement {
+        name: String,
+        attributes: Vec<JsxAttribute>,
+    },
+    JsxFragment,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -256,6 +262,18 @@ pub enum AssignmentOperator {
     BitwiseXorEq,
     // &=
     BitwiseAndEq,
+}
+
+// https://facebook.github.io/jsx/
+#[derive(Debug, Clone, PartialEq)]
+pub enum JsxAttribute {
+    JsxSpreadAttribute {
+        expression: Expression,
+    },
+    JsxAttribute {
+        name: String,
+        value: Option<Expression>,
+    },
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-statements-and-declarations
