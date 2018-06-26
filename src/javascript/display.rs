@@ -16,15 +16,6 @@ impl fmt::Display for Program {
     }
 }
 
-impl fmt::Display for FunctionBodyStatement {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FunctionBodyStatement::Statement(s) => write!(f, "{}", s),
-            _ => write!(f, ""),
-        }
-    }
-}
-
 impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -81,7 +72,7 @@ impl fmt::Display for Pattern {
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expression::Id { id } => write!(f, "{}", id),
+            Expression::IdReference { id } => write!(f, "{}", id),
             Expression::Literal { literal } => write!(f, "{}", literal),
             Expression::Call { callee, arguments } => write!(
                 f,
@@ -93,7 +84,7 @@ impl fmt::Display for Expression {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-            Expression::Object { properties } => write!(
+            Expression::ObjectLiteral { properties } => write!(
                 f,
                 "{{{}}}",
                 properties
@@ -102,7 +93,28 @@ impl fmt::Display for Expression {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
-            Expression::Function { function } => write!(f, "{}", function),
+            Expression::Function {
+                id,
+                ref generator,
+                params,
+                body,
+                ref async,
+            } => write!(
+                f,
+                "{}function{}{}({}){{{}}}",
+                if *async { "async " } else { "" },
+                id.clone().unwrap_or_default(),
+                if *generator { "*" } else { "" },
+                params
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join(","),
+                body.iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join(";"),
+            ),
             _ => write!(f, ""),
         }
     }
@@ -121,37 +133,6 @@ impl fmt::Display for PropertyKind {
             PropertyKind::Get => write!(f, "get "),
             PropertyKind::Set => write!(f, "set "),
         }
-    }
-}
-
-impl fmt::Display for PropertyKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            PropertyKey::Id(id) => write!(f, "{}", id),
-            PropertyKey::Expression(e) => write!(f, "[{}]", e),
-            PropertyKey::Literal(l) => write!(f, "{}", l),
-        }
-    }
-}
-
-impl fmt::Display for Function {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "function{}{}({}){{{}}}",
-            self.id.clone().unwrap_or_default(),
-            if self.generator { "*" } else { "" },
-            self.params
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<_>>()
-                .join(","),
-            self.body
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<_>>()
-                .join(";"),
-        )
     }
 }
 
@@ -174,7 +155,6 @@ impl fmt::Display for Literal {
             Literal::BooleanLiteral(b) => write!(f, "{}", b),
             Literal::NullLiteral(n) => write!(f, "{}", n),
             Literal::NumberLiteral(n) => write!(f, "{}", n),
-            Literal::RegexLiteral(r) => write!(f, "{}", r),
         }
     }
 }

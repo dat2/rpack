@@ -8,12 +8,9 @@ use petgraph::Graph;
 use ring::digest;
 use std::collections::HashMap;
 
-fn map_statements(
-    path_to_module_id: &HashMap<String, String>,
-    statement: &Statement,
-) -> FunctionBodyStatement {
+fn map_statements(path_to_module_id: &HashMap<String, String>, statement: &Statement) -> Statement {
     // TODO match path to module id
-    FunctionBodyStatement::Statement(match statement {
+    match statement {
         match_ast!(import [id] from [path]) => {
             build_ast! {
                     var [pat_id id.clone()] = [
@@ -24,7 +21,7 @@ fn map_statements(
             }
         }
         other => other.clone(),
-    })
+    }
 }
 
 pub fn codegen(graph: &Graph<JsModule, usize>, entry_point_id: NodeIndex) -> Result<String, Error> {

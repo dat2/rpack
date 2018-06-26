@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 extern crate clap;
 extern crate combine;
 extern crate failure;

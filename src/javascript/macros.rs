@@ -24,7 +24,7 @@ macro_rules! build_ast {
         }
     };
     (expr_id $id:expr) => {
-        Expression::Id {
+        Expression::IdReference {
             id: $id
         }
     };
@@ -41,22 +41,20 @@ macro_rules! build_ast {
     };
     (expr_func [$($params:tt),+] {$body:expr}) => {
         Expression::Function {
-            function: Function {
-                id: None,
-                params: vec![$(build_ast!($params)),+],
-                body: $body,
-                generator: false
-            }
+            id: None,
+            params: vec![$(build_ast!($params)),+],
+            body: $body,
+            generator: false,
+            async: false
         }
     };
     (expr_obj {$properties:expr}) => {
-        Expression::Object {
+        Expression::ObjectLiteral {
             properties: $properties
         }
     };
     (prop_str_key $key:expr) => {
-        PropertyKey::Literal(Literal::StringLiteral($key))
-    };
+        Expression::Literal { literal: Literal::StringLiteral($key) }};
     (prop [$($key:tt)+] [$($value:tt)+]) => {
         Property {
             key: build_ast!($($key)+),

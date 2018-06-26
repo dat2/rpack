@@ -4,7 +4,7 @@ use combine::parser::choice::{choice, optional};
 use combine::parser::combinator::{not_followed_by, try};
 use combine::parser::error::unexpected;
 use combine::parser::item::{none_of, one_of, satisfy, token, value};
-use combine::parser::repeat::{count, many, many1, sep_by, skip_until};
+use combine::parser::repeat::{count, many, many1, skip_until};
 use combine::parser::sequence::between;
 use combine::stream::state::State;
 use combine::{eof, Parser, Stream};
@@ -321,10 +321,13 @@ where
                 .map(|(c, s): (char, String)| c.to_string() + &s),
         ),
         optional(exponent_part()),
-    ).map(|(literal_opt, digits_opt, exponent_opt)| {
-            literal_opt.unwrap_or_else(String::new)
-                + &digits_opt.unwrap_or_else(String::new)
-                + &exponent_opt.unwrap_or_else(String::new)
+    ).then(|tuple| match tuple {
+            (None, None, None) => unexpected("empty").map(|_| String::new()).left(),
+            (literal_opt, digits_opt, exponent_opt) => value(
+                literal_opt.unwrap_or_else(String::new)
+                    + &digits_opt.unwrap_or_else(String::new)
+                    + &exponent_opt.unwrap_or_else(String::new),
+            ).right(),
         })
         .map(|s| s.parse::<f64>().unwrap())
 }
@@ -1022,16 +1025,256 @@ mod literal_tests {
 }
 
 // https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-expressions
+fn primary_expression<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        try(this()),
+        try(identifier_reference()),
+        try(literal()),
+        array_literal(),
+    ))
+}
 
-// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-statements-and-declarations
+fn this<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    string("this").map(|_| Expression::This)
+}
 
-// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-functions-and-classes
+fn identifier_reference<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    identifier().map(|id| Expression::IdReference { id })
+}
 
-// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-scripts-and-modules
+fn literal<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    choice((
+        try(null_literal()).map(|n| Expression::Literal {
+            literal: Literal::NullLiteral(n),
+        }),
+        try(boolean_literal()).map(|n| Expression::Literal {
+            literal: Literal::BooleanLiteral(n),
+        }),
+        try(numeric_literal()).map(|n| Expression::Literal {
+            literal: Literal::NumberLiteral(n),
+        }),
+        try(string_literal()).map(|n| Expression::Literal {
+            literal: Literal::StringLiteral(n),
+        }),
+    ))
+}
+
+fn array_literal<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    between(
+        token('[').skip(skip_tokens()),
+        token(']').skip(skip_tokens()),
+        elision().with(element_list()).skip(elision()),
+    ).map(|elements| Expression::ArrayLiteral { elements })
+}
+
+fn elision<I>() -> impl Parser<Input = I, Output = ()>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    many::<Vec<_>, _>(token(',')).with(skip_tokens())
+}
+
+fn element_list<I>() -> impl Parser<Input = I, Output = Vec<Expression>>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    many(choice((try(assignment_expression()), spread_element())).skip(elision()))
+}
+
+fn spread_element<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    string("...")
+        .with(assignment_expression())
+        .map(|expression| Expression::Spread {
+            expression: Box::new(expression),
+        })
+}
+
+fn assignment_expression<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    yield_expression()
+}
+
+fn yield_expression<I>() -> impl Parser<Input = I, Output = Expression>
+where
+    I: Stream<Item = char>,
+    I::Error: ParseError<I::Item, I::Range, I::Position>,
+{
+    (
+        string("yield"),
+        skip_tokens(),
+        optional(token('*')),
+        skip_tokens(),
+        // optional(assignment_expression())
+    ).map(|(_, _, opt_star, _)| Expression::Yield {
+        argument: None,
+        delegate: opt_star.is_some(),
+    })
+}
+
+#[cfg(test)]
+mod expression_test {
+    use super::*;
+
+    #[test]
+    fn test_this() {
+        assert_eq!(
+            primary_expression().parse("this"),
+            Ok((Expression::This, ""))
+        );
+    }
+
+    #[test]
+    fn test_identifier_reference() {
+        assert_eq!(
+            primary_expression().parse("abc123"),
+            Ok((
+                Expression::IdReference {
+                    id: "abc123".to_string()
+                },
+                ""
+            ))
+        );
+    }
+
+    #[test]
+    fn test_literal() {
+        assert_eq!(
+            primary_expression().parse("null"),
+            Ok((
+                Expression::Literal {
+                    literal: Literal::NullLiteral(NullLiteral)
+                },
+                ""
+            ))
+        );
+        assert_eq!(
+            primary_expression().parse("true"),
+            Ok((
+                Expression::Literal {
+                    literal: Literal::BooleanLiteral(true)
+                },
+                ""
+            ))
+        );
+        assert_eq!(
+            primary_expression().parse("false"),
+            Ok((
+                Expression::Literal {
+                    literal: Literal::BooleanLiteral(false)
+                },
+                ""
+            ))
+        );
+        assert_eq!(
+            primary_expression().parse("123.e1"),
+            Ok((
+                Expression::Literal {
+                    literal: Literal::NumberLiteral(1230f64)
+                },
+                ""
+            ))
+        );
+        assert_eq!(
+            primary_expression().parse("'abc'"),
+            Ok((
+                Expression::Literal {
+                    literal: Literal::StringLiteral("abc".to_string())
+                },
+                ""
+            ))
+        );
+    }
+
+    #[test]
+    fn test_array_literal() {
+        assert_eq!(
+            primary_expression().parse("[]"),
+            Ok((
+                Expression::ArrayLiteral {
+                    elements: Vec::new()
+                },
+                ""
+            ))
+        );
+        assert_eq!(
+            primary_expression().parse("[,,,,]"),
+            Ok((
+                Expression::ArrayLiteral {
+                    elements: Vec::new()
+                },
+                ""
+            ))
+        );
+        assert_eq!(
+            primary_expression().parse("[,,,,yield,,yield,,,]"),
+            Ok((
+                Expression::ArrayLiteral {
+                    elements: vec![
+                        Expression::Yield {
+                            argument: None,
+                            delegate: false,
+                        },
+                        Expression::Yield {
+                            argument: None,
+                            delegate: false,
+                        },
+                    ],
+                },
+                ""
+            ))
+        );
+        assert_eq!(
+            primary_expression().parse("[,,,...yield,,,]"),
+            Ok((
+                Expression::ArrayLiteral {
+                    elements: vec![Expression::Spread {
+                        expression: Box::new(Expression::Yield {
+                            argument: None,
+                            delegate: false,
+                        }),
+                    }],
+                },
+                ""
+            ))
+        );
+    }
+}
 
 // https://facebook.github.io/jsx/
 
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-statements-and-declarations
+
 // statements
+/*
 fn import_statement<I>() -> impl Parser<Input = I, Output = Statement>
 where
     I: Stream<Item = char>,
@@ -1137,15 +1380,19 @@ where
         var_declaration(),
     ))
 }
+*/
 
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-functions-and-classes
+
+// https://www.ecma-international.org/ecma-262/8.0/index.html#sec-ecmascript-language-scripts-and-modules
 fn program<I>() -> impl Parser<Input = I, Output = Program>
 where
     I: Stream<Item = char>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
-    many(statement()).skip(eof()).map(|body| Program {
+    eof().map(|_| Program {
         source_type: SourceType::Module,
-        body,
+        body: Vec::new(),
     })
 }
 
