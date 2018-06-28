@@ -1,7 +1,6 @@
 use context::Context;
 use failure::Error;
-use javascript::ast::*;
-use javascript::{parse_js_module, JsModule};
+use jsmodule::{parse_js_module, JsModule};
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
 use std::path::{Path, PathBuf};
@@ -12,11 +11,13 @@ fn resolve_paths_to_absolute(
 ) -> Result<Vec<PathBuf>, Error> {
     let mut dependencies = Vec::new();
     for mut statement in &mut module.program.body {
+        /* 
         if let match_ast!(import [_] from [ref mut import_path]) = statement {
             let resolved_dep = context.resolve(&module.path, &import_path)?;
             *import_path = format!("{}", resolved_dep.display());
             dependencies.push(resolved_dep);
         }
+        */
     }
     Ok(dependencies)
 }

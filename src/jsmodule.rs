@@ -1,10 +1,5 @@
-#[macro_use]
-mod macros;
-pub mod ast;
-mod display;
-pub mod parser;
-
-use self::ast::*;
+use ecmascript;
+use ecmascript::ast::Program;
 use failure::{self, Error};
 use io_utils;
 use std::path::{Path, PathBuf};
@@ -18,7 +13,7 @@ pub struct JsModule {
 
 pub fn parse_js_module<P: AsRef<Path>>(path: &P) -> Result<JsModule, Error> {
     let (absolute_path, source) = io_utils::read_file(&path)?;
-    match self::parser::parse(&source) {
+    match ecmascript::parse(&source) {
         Ok(program) => Ok(JsModule {
             source,
             program,

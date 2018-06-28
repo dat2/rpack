@@ -1,20 +1,20 @@
 #![allow(dead_code)]
 extern crate clap;
 extern crate combine;
+#[macro_use]
+extern crate ecmascript;
 extern crate failure;
 extern crate hex;
-#[macro_use]
 extern crate lazy_static;
 extern crate petgraph;
 extern crate ring;
 extern crate unicode_xid;
 
-#[macro_use]
-mod javascript;
 mod codegen;
 mod context;
 mod dependency;
 mod io_utils;
+mod jsmodule;
 
 use clap::{App, Arg, SubCommand};
 use context::Context;
